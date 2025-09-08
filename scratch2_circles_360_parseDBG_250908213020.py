@@ -8,6 +8,7 @@ Now with robust climb-rate realism:git remote add origin
 - Sustained-lift segments require >=5 samples and reject unrealistic avg > 5 m/s
 - Console adds flight distance, duration, average speed, and average climb rates
 
+
 Stages:
 1) Parser → DataFrame(time, lat, lon, gps_alt, pressure_alt)
 2) Derived fields → dt, dist, speed, climb_rate, heading, turn_rate (using smoothed pressure altitude when available)

@@ -1,0 +1,22 @@
+# === Python ===
+__pycache__/
+*.py[cod]
+*.pyo
+*.pyd
+*.so
+
+# === Virtual envs ===
+venv/
+.env/
+.venv/
+
+# === IDEs ===
+.idea/
+.vscode/
+
+# === Local commit message drafts ===
+commit msgs/
+
+# === OS cruft ===
+.DS_Store
+Thumbs.db

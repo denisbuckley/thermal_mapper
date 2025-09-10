@@ -28,7 +28,7 @@ from igc_utils import parse_igc, compute_derived, detect_tow_segment
 
 # -------------------- parameters --------------------
 # Clustering knobs (same defaults as v3e)
-EPS_M = 2000.0
+EPS_M = 5000.0
 MAX_GAP_S = 1200.0
 ALT_DROP_M = 180.0
 ALT_DROP_FRAC = 0.40

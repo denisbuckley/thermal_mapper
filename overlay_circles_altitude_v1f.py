@@ -1,4 +1,7 @@
-
+'''	•	Detects circles, circle clusters, and altitude clusters
+	•	Plots them (green ✕, black ✕, orange ✕ with T#)
+	•	Always writes a debug snapshot to outputs/overlay_debug_<timestamp>.txt
+	'''
 from pathlib import Path
 from typing import Tuple, List
 from datetime import datetime

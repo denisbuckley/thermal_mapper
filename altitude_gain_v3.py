@@ -20,6 +20,7 @@ from typing import List, Tuple
 import numpy as np
 import pandas as pd
 import matplotlib.pyplot as plt
+from pathlib import Path
 
 from igc_utils import parse_igc, compute_derived, detect_tow_segment
 

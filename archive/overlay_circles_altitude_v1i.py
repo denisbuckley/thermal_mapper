@@ -1,32 +1,42 @@
 
 """
-compare_circles_altitude_v2d.py
+overlay_circles_altitude_v1i.py
 --------------------------------
 Purpose
-    Compare altitude-based thermal clusters with circle-based clusters — exposing
-    **both raw and size-filtered cluster views** — to quantify agreement.
+    Overlay *circle-based* thermalling detections and *altitude-based* thermal detections
+    on a single map for quick visual QA — now with cluster-size-aware filtering and sizing.
 
 What this script does
-    1) Parses IGC and removes tow.
-    2) Detects circles and clusters them (space + time).
-    3) Detects altitude-based thermals (rising segments with valley merge).
-    4) Computes cluster size `n`; makes a **filtered view** with n≥MIN_CLUSTER_SIZE.
-    5) Builds two comparisons:
-        a) Altitude vs **raw** circle clusters
-        b) Altitude vs **filtered (n≥MIN_CLUSTER_SIZE)** circle clusters
-    6) Writes two CSVs:
-        - outputs/compare_raw_<timestamp>.csv
-        - outputs/compare_filtered_<timestamp>.csv
-       Each includes nearest match distance and time overlap/gap.
-    7) Prints first 30 rows of the filtered comparison for quick inspection.
+    1) Parses IGC and computes derived fields.
+    2) Removes tow segment (if detected).
+    3) Detects *circles* (multi-emission, full-turn logic) and clusters them (space + time).
+    4) Detects *altitude-based* thermals (rising segments merged across shallow valleys).
+    5) Computes cluster size `n` and applies a configurable **MIN_CLUSTER_SIZE** filter.
+    6) Plots:
+        - Track (green line)
+        - Raw circle midpoints (green ×)
+        - **Circle clusters (black ×) sized by `n`**; sub-threshold clusters shown faint grey ×
+        - Altitude clusters (orange ×) with T# labels
+    7) Writes a concise debug file to outputs/overlay_debug_<yymmddhhmmss>.txt
 
-Tuning
-    - CLUSTER_EPS_M, CLUSTER_GAP_S as in overlay
-    - MIN_CLUSTER_SIZE (NEW): threshold for "strong" circle clusters
-    - MATCH_EPS_M, MATCH_GAP_S: spatial/temporal thresholds for matching
+Inputs
+    - IGC file path set in main() (`igc_file`). Requires igc_utils.py:
+      - parse_igc, compute_derived, detect_tow_segment
 
-Usage
-    Run directly in PyCharm. Inspect console + CSVs in outputs/.
+Key Tuning (edit below)
+    # Circles
+    C_MIN_ARC_DEG, C_SMOOTH_S, C_MAX_WIN_SAMPLES, C_MIN_DIR_RATIO
+    CLUSTER_EPS_M, CLUSTER_GAP_S
+
+    # Cluster filtering (NEW)
+    MIN_CLUSTER_SIZE  -> keep clusters with at least this many circles
+
+    # Altitude
+    A_SMOOTH_S, A_MIN_RATE_MPS, A_MIN_DUR_S, A_MIN_GAIN_M, A_ALT_DROP_M, A_ALT_DROP_FRAC
+
+Outputs
+    - Debug text: outputs/overlay_debug_<timestamp>.txt
+    - Plot window with overlays
 """
 
 from pathlib import Path
@@ -35,33 +45,32 @@ from datetime import datetime
 import math
 import numpy as np
 import pandas as pd
+import matplotlib.pyplot as plt
 
 from igc_utils import parse_igc, compute_derived, detect_tow_segment
 
+# -------------------- Tuning: CIRCLES --------------------
+C_MIN_ARC_DEG      = 300.0     # Full-turn emission threshold (deg)
+C_SMOOTH_S         = 3.0       # Heading smoothing window (seconds)
+C_MAX_WIN_SAMPLES  = 2400      # Per-run cap to avoid runaway accumulation
+C_MIN_DIR_RATIO    = 0.65      # Dominance of turning direction (>= this)
+CLUSTER_EPS_M      = 1500.0    # Circle-cluster spatial radius (m)
+CLUSTER_GAP_S      = 900.0     # Allowable non-overlap time gap (s)
+
+# -------------------- NEW: cluster-size filter ------------
+MIN_CLUSTER_SIZE   = 5         # Keep clusters with at least this many circles
+# ---------------------------------------------------------
+
+# -------------------- Tuning: ALTITUDE ------------------
+A_SMOOTH_S         = 9.0       # Altitude smoothing (seconds)
+A_MIN_RATE_MPS     = 0.5       # Start climb when vertical rate >= this (m/s)
+A_MIN_DUR_S        = 60.0      # Min duration for a climb (s)
+A_MIN_GAIN_M       = 60.0      # Min net altitude gain (m)
+A_ALT_DROP_M       = 180.0     # Merge valley if absolute drop below this (m)
+A_ALT_DROP_FRAC    = 0.30      # Merge valley if fractional drop below this
+# --------------------------------------------------------
+
 R_EARTH_M = 6371000.0
-
-# Matching thresholds
-MATCH_EPS_M = 2500.0  # spatial match radius (m)
-MATCH_GAP_S = 1200.0  # if no overlap, max allowed time gap (s)
-
-# Circles tuning (same as overlay)
-C_MIN_ARC_DEG      = 300.0
-C_SMOOTH_S         = 3.0
-C_MAX_WIN_SAMPLES  = 2400
-C_MIN_DIR_RATIO    = 0.65
-CLUSTER_EPS_M      = 1500.0
-CLUSTER_GAP_S      = 900.0
-
-# Cluster filter (NEW)
-MIN_CLUSTER_SIZE   = 5
-
-# Altitude tuning (same as overlay)
-A_SMOOTH_S         = 9.0
-A_MIN_RATE_MPS     = 0.5
-A_MIN_DUR_S        = 60.0
-A_MIN_GAIN_M       = 60.0
-A_ALT_DROP_M       = 180.0
-A_ALT_DROP_FRAC    = 0.30
 
 def ts_stamp() -> str:
     return datetime.now().strftime("%y%m%d%H%M%S")
@@ -113,6 +122,7 @@ def detect_circles_multi(df: pd.DataFrame,
                          min_dir_ratio=C_MIN_DIR_RATIO):
     df = ensure_time_sec(df)
     dt = sec_per_fix(df)
+
     headings = [0.0]
     for i in range(1, len(df)):
         headings.append(bearing_deg(df.loc[i-1,'lat'], df.loc[i-1,'lon'],
@@ -134,6 +144,7 @@ def detect_circles_multi(df: pd.DataFrame,
             now_h = hdg_s[j]
             d = circ_diff_deg(last_h, now_h)
             last_h = now_h
+
             if d > 0: pos_abs += abs(d)
             elif d < 0: neg_abs += abs(d)
             cum_abs += abs(d)
@@ -184,7 +195,7 @@ def circle_clusters(circ_df: pd.DataFrame,
         clusters_df = pd.DataFrame(columns=[
             "cluster_id","n","start_time","end_time","mean_radius_m","center_lat","center_lon"
         ])
-        return circ_with_cluster, clusters_df, clusters_df
+        return circ_with_cluster, clusters_df, clusters_df  # last is filtered
     df = circ_df.reset_index(drop=True)
     n = len(df)
     lat = df["lat_mid"].to_numpy(dtype=float); lon = df["lon_mid"].to_numpy(dtype=float)
@@ -295,51 +306,78 @@ def detect_climbs_altitude(df: pd.DataFrame):
             "gain_m","lat_mid","lon_mid"]
     return pd.DataFrame(rows, columns=cols), dt
 
-def match_alt_to_circles(alt_df: pd.DataFrame, circ_clusters_df: pd.DataFrame):
-    rows = []
-    if alt_df.empty or circ_clusters_df.empty:
-        return pd.DataFrame(rows)
-    A = alt_df.copy()
-    A['t0'] = pd.to_datetime(A['start_time'])
-    A['t1'] = pd.to_datetime(A['end_time'])
-    C = circ_clusters_df.copy()
-    C['t0'] = pd.to_datetime(C['start_time'])
-    C['t1'] = pd.to_datetime(C['end_time'])
-    for _, ar in A.iterrows():
-        best = None
-        for _, cr in C.iterrows():
-            dist_m = float(haversine_m(ar['lat_mid'], ar['lon_mid'], cr['center_lat'], cr['center_lon']))
-            if dist_m <= MATCH_EPS_M:
-                latest_start = max(ar['t0'], cr['t0'])
-                earliest_end = min(ar['t1'], cr['t1'])
-                overlap_s = max(0.0, (earliest_end - latest_start).total_seconds())
-                if overlap_s == 0:
-                    gap1 = (cr['t0'] - ar['t1']).total_seconds()
-                    gap2 = (ar['t0'] - cr['t1']).total_seconds()
-                    min_gap = max(0.0, min(gap1, gap2))
-                else:
-                    min_gap = 0.0
-                score = (dist_m, -overlap_s, min_gap)
-                if best is None or score < best[0]:
-                    best = (score, cr, dist_m, overlap_s, min_gap)
-        rows.append(dict(
-            thermal_id=int(ar['thermal_id']),
-            thermal_gain_m=float(ar['gain_m']),
-            thermal_dur_s=float(ar['duration_s']),
-            thermal_time=str(ar['start_time']) + " → " + str(ar['end_time']),
-            thermal_lat=float(ar['lat_mid']), thermal_lon=float(ar['lon_mid']),
-            match_cluster_id = int(best[1]['cluster_id']) if best else None,
-            match_dist_m = float(best[2]) if best else None,
-            time_overlap_s = float(best[3]) if best else 0.0,
-            time_gap_s = float(best[4]) if best else None,
-            cluster_n_circles = int(best[1]['n']) if best else None,
-            cluster_mean_radius_m = float(best[1]['mean_radius_m']) if best else None,
-        ))
-    return pd.DataFrame(rows)
+def plot_overlay(df: pd.DataFrame,
+                 circles, clusters_raw: pd.DataFrame,
+                 clusters_filt: pd.DataFrame,
+                 alt_clusters_df: pd.DataFrame, dt: float):
+    print(f"[overlay] circles={len(circles)}, clusters_raw={len(clusters_raw)}, clusters_filt={len(clusters_filt)}, altitude_clusters={len(alt_clusters_df)}")
+
+    fig, ax = plt.subplots(figsize=(10.8, 7.6))
+    ax.plot(df["lon"], df["lat"], color="green", lw=1.2, alpha=0.7, label="Track")
+
+    # Raw circle midpoints
+    if circles:
+        mids_lon = [float(df["lon"].iloc[(s+e)//2]) for (s,e,_) in circles]
+        mids_lat = [float(df["lat"].iloc[(s+e)//2]) for (s,e,_) in circles]
+        ax.scatter(mids_lon, mids_lat, marker='x', c='green', s=60, linewidths=1.8, zorder=5, alpha=0.8, label="Circles")
+
+    # Raw clusters (sub-threshold) as faint grey
+    if not clusters_raw.empty:
+        small = clusters_raw[clusters_raw["n"] < MIN_CLUSTER_SIZE]
+        if not small.empty:
+            ax.scatter(small["center_lon"], small["center_lat"],
+                       marker='x', c='lightgrey', s=40, linewidths=1.5, zorder=6, label=f"Circle clusters (n<{MIN_CLUSTER_SIZE})")
+
+    # Filtered clusters sized by n
+    if not clusters_filt.empty:
+        sizes = (clusters_filt["n"].clip(lower=MIN_CLUSTER_SIZE) - MIN_CLUSTER_SIZE + 1) * 40.0
+        sizes = sizes.clip(80, 400)
+        ax.scatter(clusters_filt["center_lon"], clusters_filt["center_lat"],
+                   marker='x', c='k', s=sizes, linewidths=2.2, zorder=7, label=f"Circle clusters (n≥{MIN_CLUSTER_SIZE})")
+
+    # Altitude clusters
+    if not alt_clusters_df.empty:
+        ax.scatter(alt_clusters_df["lon_mid"], alt_clusters_df["lat_mid"],
+                   marker='x', c='orange', s=110, linewidths=2.0, zorder=8, label="Altitude clusters (T#)")
+        for _, r in alt_clusters_df.iterrows():
+            ax.text(r["lon_mid"], r["lat_mid"], f"T{int(r['thermal_id'])}", fontsize=9,
+                    ha='center', va='bottom', color='black', zorder=9)
+
+    ax.set_title(f"Overlay: Circles (green ✕), Circle clusters (size∝n), Altitude clusters (orange ✕)\nFilter: n≥{MIN_CLUSTER_SIZE}")
+    ax.set_xlabel("Longitude"); ax.set_ylabel("Latitude")
+    ax.legend(loc='upper left'); ax.grid(True, alpha=0.3)
+
+    txt = (f"Cadence: {dt:.2f} s/fix | Circles: {len(circles)} | "
+           f"Clusters raw: {len(clusters_raw)} | Clusters (n≥{MIN_CLUSTER_SIZE}): {len(clusters_filt)} | Altitude clusters: {len(alt_clusters_df)}")
+    ax.text(0.99, 0.01, txt, transform=ax.transAxes, va='bottom', ha='right',
+            fontsize=9, family='monospace',
+            bbox=dict(boxstyle="round,pad=0.35", facecolor="white", alpha=0.85, lw=0.6))
+
+    plt.tight_layout(); plt.show()
+
+def write_debug_file(clusters_raw: pd.DataFrame, clusters_filt: pd.DataFrame, dt: float, alt_clusters_df: pd.DataFrame, circles_count: int):
+    out_dir = Path.cwd() / "outputs"; ensure_dir(out_dir)
+    fn = out_dir / f"overlay_debug_{ts_stamp()}.txt"
+    lines = [
+        f"Cadence: {dt:.2f} s/fix",
+        f"Circles count: {circles_count}",
+        f"Circle clusters (raw): {len(clusters_raw)}",
+        f"Circle clusters (n≥{MIN_CLUSTER_SIZE}): {len(clusters_filt)}",
+        f"Altitude clusters: {len(alt_clusters_df)}",
+        "",
+        "[Top raw clusters by n]",
+        clusters_raw.sort_values('n', ascending=False).head(12).to_string(index=False) if not clusters_raw.empty else "(none)",
+        "",
+        "[Filtered clusters (n≥{thr})]".format(thr=MIN_CLUSTER_SIZE),
+        clusters_filt.sort_values('n', ascending=False).head(12).to_string(index=False) if not clusters_filt.empty else "(none)",
+        ""
+    ]
+    fn.write_text("\n".join(lines), encoding="utf-8")
+    print(f"[overlay] Wrote debug file: {fn.resolve()}")
 
 def main():
-    igc_file = "2020-11-08 Lumpy Paterson 108645.igc"  # <-- EDIT if needed
-    print(f"[compare v2d] Parsing IGC: {igc_file}")
+    igc_file = "../2020-11-08 Lumpy Paterson 108645.igc"  # <-- EDIT if needed
+    print(f"[overlay v1i] Parsing IGC: {igc_file}")
     df = parse_igc(igc_file)
     df = compute_derived(df)
     df = ensure_time_sec(df)
@@ -350,39 +388,17 @@ def main():
         tow = None
     if isinstance(tow, tuple) and len(tow) == 2:
         s, e = tow
-        print(f"[compare v2d] Tow detected: {s}→{e}. Excluding tow.")
+        print(f"[overlay v1i] Tow detected: {s}→{e}. Excluding tow.")
         df = df.iloc[e+1:].reset_index(drop=True)
         df = ensure_time_sec(df)
 
-    # Detect
     circles, dt = detect_circles_multi(df)
     circ_df = circles_to_df(df, circles)
     circ_with_cluster, clusters_raw, clusters_filt = circle_clusters(circ_df)
     alt_clusters_df, _ = detect_climbs_altitude(df)
 
-    out_dir = Path.cwd() / "outputs"
-    ensure_dir(out_dir)
-
-    # Build both comparisons
-    comp_raw = match_alt_to_circles(alt_clusters_df, clusters_raw)
-    comp_filt = match_alt_to_circles(alt_clusters_df, clusters_filt)
-
-    # Save
-    csv_raw  = out_dir / f"compare_raw_{ts_stamp()}.csv"
-    csv_filt = out_dir / f"compare_filtered_{ts_stamp()}.csv"
-    comp_raw.to_csv(csv_raw, index=False)
-    comp_filt.to_csv(csv_filt, index=False)
-
-    # Also save cluster summaries for reference
-    clusters_raw_csv  = out_dir / f"circle_clusters_raw_{ts_stamp()}.csv"
-    clusters_filt_csv = out_dir / f"circle_clusters_filtered_{ts_stamp()}.csv"
-    clusters_raw.to_csv(clusters_raw_csv, index=False)
-    clusters_filt.to_csv(clusters_filt_csv, index=False)
-
-    print(f"[compare] Circles: {len(circ_df)} | Clusters raw: {len(clusters_raw)} | Clusters (n≥{MIN_CLUSTER_SIZE}): {len(clusters_filt)} | Altitude clusters: {len(alt_clusters_df)}")
-    print(f"[compare] Wrote: {csv_raw.name}, {csv_filt.name}")
-    with pd.option_context("display.max_rows", 50, "display.width", 160):
-        print("\n[Filtered matches preview]\n", comp_filt.fillna("").head(30))
+    write_debug_file(clusters_raw, clusters_filt, dt, alt_clusters_df, len(circles))
+    plot_overlay(df, circles, clusters_raw, clusters_filt, alt_clusters_df, dt)
 
 if __name__ == "__main__":
     main()

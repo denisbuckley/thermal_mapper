@@ -380,17 +380,35 @@ def plot_overlay(df, circles, circle_clusters, alt_clusters, banner_text, out_cs
 
     # circle clusters (black × with n)
     if not circle_clusters.empty:
-        ax.scatter(circle_clusters['lon'], circle_clusters['lat'], marker='x', s=80, color='black', label='Circle clusters')
-        # label with n
+        ax.scatter(circle_clusters['lon'], circle_clusters['lat'], marker='x', s=80, color='black',
+                   label='Circle clusters')
+
         for _, r in circle_clusters.iterrows():
-            ax.text(r['lon']+0.01, r['lat']+0.005, f"{int(r['n'])}", fontsize=9, color='black')
+            ax.annotate(
+                f"{int(r['n'])}",
+                xy=(r['lon'], r['lat']),
+                xytext=(6, 6),  # offset in points (pixels)
+                textcoords='offset points',
+                fontsize=9,
+                color='black',
+                ha='left', va='bottom',
+                bbox=dict(facecolor='white', edgecolor='none', alpha=0.6, pad=0.5)
+            )
 
     # altitude clusters (orange × with T#)
     if alt_clusters is not None and not alt_clusters.empty:
         ax.scatter(alt_clusters['lon'], alt_clusters['lat'], marker='x', s=80, color='orange', label='Altitude clusters (T#)')
         for i, r in alt_clusters.reset_index(drop=True).iterrows():
-            ax.text(r['lon']-0.02, r['lat']+0.01, f"T{i+1}", fontsize=9, color='orange')
-
+            ax.annotate(
+                f"T{i + 1}",
+                xy=(r['lon'], r['lat']),
+                xytext=(-6, -6),  # SW corner offset in pixels
+                textcoords='offset points',
+                fontsize=9,
+                color='orange',
+                ha='right', va='top',
+                bbox=dict(facecolor='white', edgecolor='none', alpha=0.6, pad=0.5)
+            )
     ax.legend(loc='upper left')
     ax.set_xlabel("Longitude"); ax.set_ylabel("Latitude")
     ax.set_title("Overlay: Circles (green ×), Circle clusters (black × w/ n), Altitude clusters (orange ×)")

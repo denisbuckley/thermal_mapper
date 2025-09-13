@@ -1,1 +1,0 @@
-Added docstrings + guardrails (turn-rate + radius) to circles detector; writes CSV + debug and plots green × for circles.

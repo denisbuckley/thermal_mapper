@@ -55,6 +55,17 @@ import numpy as np
 import pandas as pd
 import matplotlib.pyplot as plt
 
+# === Injected by apply_tuning_patches_v1.py ===
+from tuning_loader import load_tuning, override_globals
+_tuning = load_tuning("config/tuning_params.csv")
+override_globals(globals(), _tuning, allowed={
+    "C_MIN_ARC_DEG","C_MIN_RATE_DPS","C_MAX_RATE_DPS",
+    "C_MIN_RADIUS_M","C_MAX_RADIUS_M","C_MIN_DIR_RATIO",
+    "TIME_CAP_S","C_MAX_WIN_SAMPLES","C_EPS_M","C_MIN_SAMPLES"
+})
+
+
+
 # -------------------- Config --------------------
 DEFAULT_IGC = "2020-11-08 Lumpy Paterson 108645.igc"
 

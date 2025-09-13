@@ -62,6 +62,25 @@ import matplotlib.pyplot as plt
 # Try to import igc_utils if present in the project; otherwise use simple parser fallback
 try:
     from igc_utils import parse_igc, compute_derived, detect_tow_segment
+
+# === Injected by apply_tuning_patches_v1.py ===
+from tuning_loader import load_tuning, override_globals
+_tuning = load_tuning("config/tuning_params.csv")
+override_globals(globals(), _tuning, allowed={
+    "C_MIN_ARC_DEG","C_MIN_RATE_DPS","C_MAX_RATE_DPS",
+    "C_MIN_RADIUS_M","C_MAX_RADIUS_M","C_MIN_DIR_RATIO",
+    "TIME_CAP_S","C_MAX_WIN_SAMPLES","C_EPS_M","C_MIN_SAMPLES"
+})
+override_globals(globals(), _tuning, allowed={
+    "MIN_CLIMB_S","MIN_GAIN_M","SMOOTH_RADIUS_S",
+    "MAX_GAP_S","ALT_DROP_M","ALT_DROP_FRAC",
+    "A_EPS_M","A_MIN_SAMPLES"
+})
+override_globals(globals(), _tuning, allowed={
+    "EPS_M","MIN_OVL_FRAC","MAX_TIME_GAP_S"
+})
+
+
     HAVE_IGC_UTILS = True
 except Exception:
     HAVE_IGC_UTILS = False

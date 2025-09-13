@@ -11,7 +11,7 @@ If neither is present, it raises a clear ImportError with guidance.
 
 # Try the promoted baseline first
 try:
-    from circle_detector_full_360 import parse_igc, compute_derived, detect_tow_segment
+    from drafts.circle_detector_full_360 import parse_igc, compute_derived, detect_tow_segment
 except Exception as e1:
     try:
         from scratch2 import parse_igc, compute_derived, detect_tow_segment

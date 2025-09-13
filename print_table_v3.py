@@ -8,7 +8,8 @@ Print BOTH latest enriched tables (if present) in one run:
   - outputs/altitude_clusters_enriched_*.csv
 
 Tables are printed with aligned columns and 1-decimal numeric formatting.
-If one is missing, the other is still printed. No arguments required.
+If one is missing, the other is
+still printed. No arguments required.
 """
 
 import os, glob

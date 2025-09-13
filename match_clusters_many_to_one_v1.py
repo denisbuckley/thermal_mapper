@@ -33,6 +33,15 @@ import numpy as np
 import pandas as pd
 from datetime import datetime
 
+# === Injected by apply_tuning_patches_v1.py ===
+from tuning_loader import load_tuning, override_globals
+_tuning = load_tuning("config/tuning_params.csv")
+override_globals(globals(), _tuning, allowed={
+    "EPS_M","MIN_OVL_FRAC","MAX_TIME_GAP_S"
+})
+
+
+
 # ---------------- Parameters ----------------
 EPS_M = 2000.0
 MIN_OVL_FRAC = 0.20

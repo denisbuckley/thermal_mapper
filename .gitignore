@@ -20,3 +20,11 @@ commit msgs/
 # === OS cruft ===
 .DS_Store
 Thumbs.db
+
+# === Flight analysis logs ===
+*_cluster_*.txt
+altitude_gain_*.txt
+circles_debug_*.txt
+
+# === Local drafts ===
+drafts/

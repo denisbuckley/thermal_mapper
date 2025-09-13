@@ -25,6 +25,17 @@ import matplotlib.pyplot as plt
 
 from igc_utils import parse_igc, compute_derived, detect_tow_segment
 
+# === Injected by apply_tuning_patches_v1.py ===
+from tuning_loader import load_tuning, override_globals
+_tuning = load_tuning("config/tuning_params.csv")
+override_globals(globals(), _tuning, allowed={
+    "MIN_CLIMB_S","MIN_GAIN_M","SMOOTH_RADIUS_S",
+    "MAX_GAP_S","ALT_DROP_M","ALT_DROP_FRAC",
+    "A_EPS_M","A_MIN_SAMPLES"
+})
+
+
+
 # -------------------- logging tee --------------------
 class Tee:
     def __init__(self, *files):

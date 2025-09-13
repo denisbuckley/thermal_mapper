@@ -34,6 +34,17 @@ from pathlib import Path
 
 from igc_utils import parse_igc, compute_derived, detect_tow_segment
 
+# === Injected by apply_tuning_patches_v1.py ===
+from tuning_loader import load_tuning, override_globals
+_tuning = load_tuning("config/tuning_params.csv")
+override_globals(globals(), _tuning, allowed={
+    "C_MIN_ARC_DEG","C_MIN_RATE_DPS","C_MAX_RATE_DPS",
+    "C_MIN_RADIUS_M","C_MAX_RADIUS_M","C_MIN_DIR_RATIO",
+    "TIME_CAP_S","C_MAX_WIN_SAMPLES","C_EPS_M","C_MIN_SAMPLES"
+})
+
+
+
 # -------------------- parameters --------------------
 CIRC_MIN_ARC_DEG = 330.0     # require at least this much absolute turn
 REQUIRE_NET_360  = True      # also require net winding ≥ 360° in consistent direction

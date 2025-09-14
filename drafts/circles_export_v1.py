@@ -159,7 +159,7 @@ def detect_full_circles(df: pd.DataFrame):
     sign = np.sign(dtheta)
     sign[sign == 0] = np.nan
     # forward-fill sign to avoid 0 plateaus
-    pd_sign = pd.Series(sign).fillna(method='ffill').fillna(method='bfill').to_numpy()
+    pd_sign = pd.Series(sign).ffill().bfill().to_numpy()
     dtheta_consistent = np.where(pd_sign >= 0, np.abs(dtheta), -np.abs(dtheta))
 
     circles = []

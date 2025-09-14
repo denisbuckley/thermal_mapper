@@ -28,3 +28,6 @@ circles_debug_*.txt
 
 # === Local drafts ===
 drafts/
+
+# Ignore local flight logs
+igc/*

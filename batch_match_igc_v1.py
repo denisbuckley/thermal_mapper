@@ -146,11 +146,10 @@ def main():
     args = ap.parse_args()
 
     # Resolve default igc dir to ./igc next to this script
-    if args.igc-dir is None:
-        script_dir = Path(__file__).resolve().parent
-        igc_dir = script_dir / "igc"
+    if args.igc_dir is None:
+        igc_dir = os.path.join(os.path.dirname(__file__), "igc")
     else:
-        igc_dir = Path(args.igc_dir)
+        igc_dir = args.igc_dir
 
     if not igc_dir.exists() or not igc_dir.is_dir():
         print(f"[batch] IGC folder not found: {igc_dir}. Create ./igc next to this script or pass --igc-dir.")

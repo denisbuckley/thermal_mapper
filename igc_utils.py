@@ -114,8 +114,7 @@ def compute_derived(df: pd.DataFrame) -> pd.DataFrame:
         heads[1:] = [_bearing_deg(lat[i-1], lon[i-1], lat[i], lon[i]) for i in range(1, len(lat))]
         if np.isnan(heads[0]):
             heads[0] = heads[1] if len(heads) > 1 else 0.0
-        out["heading"] = pd.Series(heads, index=out.index).fillna(method="bfill").fillna(0.0)
-    else:
+        out["heading"] = pd.Series(heads, index=out.index).bfill().fillna(0.0)    else:
         out["heading"] = 0.0
 
     return out

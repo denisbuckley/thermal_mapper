@@ -1,0 +1,9 @@
+[circles v1] Parsing IGC: 2020-11-08 Lumpy Paterson 108645.igc
+[circles v1] Tow detected: 0→483. Excluding tow.
+[circles v1] Points after tow trim: 8147
+/Users/denisbuckley/PycharmProjects/chatgpt_igc/circles_export_v1.py:151: FutureWarning: Series.fillna with 'method' is deprecated and will raise in a future version. Use obj.ffill() or obj.bfill() instead.
+  pd_sign = pd.Series(sign).fillna(method='ffill').fillna(method='bfill').to_numpy()
+[circles v1] Cadence ≈ 3.00 s/fix | circles detected: 0
+[circles v1] Wrote circles CSV (with cluster_id): outputs/circles_turns_250909222057.csv (0 rows)
+[circles v1] Wrote clusters CSV: outputs/circles_clusters_250909222057.csv (0 rows)
+[circles v1] Wrote cluster separations CSV: outputs/circles_cluster_pairs_250909222057.csv (0 rows)

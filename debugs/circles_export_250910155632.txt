@@ -1,0 +1,28 @@
+[circles v1d] Parsing IGC: 2020-11-08 Lumpy Paterson 108645.igc
+[circles v1d] Tow detected: 0→483. Excluding tow.
+[circles v1d] Points after tow trim: 8147
+[circles v1d] Auto‑tuned gates: {'CIRC_MIN_ARC_DEG': 320.0, 'REQUIRE_NET_360': True, 'HEADING_SMOOTH_S': 7.5, 'STEP_TOL_DEG': 9.0, 'MIN_STEP_ABS': 0.75, 'CIRC_MIN_DURATION_S': 15.0, 'CIRC_MAX_DURATION_S': 60.0, 'cadence': 3.0}
+[circles v1d] Cadence ≈ 3.00 s/fix | circles detected: 0
+[circles v1d] Wrote circles CSV (with cluster_id): outputs/circles_turns_250910155632.csv (0 rows)
+[circles v1d] Wrote clusters CSV: outputs/circles_clusters_250910155632.csv (0 rows)
+[circles v1d] Wrote cluster separations CSV: outputs/circles_cluster_pairs_250910155632.csv (0 rows)
+Traceback (most recent call last):
+  File "/Users/denisbuckley/PycharmProjects/chatgpt_igc/circles_export_v1d.py", line 379, in <module>
+    main()
+  File "/Users/denisbuckley/PycharmProjects/chatgpt_igc/circles_export_v1d.py", line 376, in main
+    plot_map_with_circles_and_clusters(df, circles, clusters_df, cfg)
+  File "/Users/denisbuckley/PycharmProjects/chatgpt_igc/circles_export_v1d.py", line 320, in plot_map_with_circles_and_clusters
+    plt.tight_layout(); plt.show()
+                        ^^^^^^^^^^
+  File "/Users/denisbuckley/PycharmProjects/chatgpt_igc/venv/lib/python3.11/site-packages/matplotlib/pyplot.py", line 614, in show
+    return _get_backend_mod().show(*args, **kwargs)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/Users/denisbuckley/PycharmProjects/chatgpt_igc/venv/lib/python3.11/site-packages/matplotlib/backend_bases.py", line 3550, in show
+    cls.mainloop()
+  File "/Users/denisbuckley/PycharmProjects/chatgpt_igc/venv/lib/python3.11/site-packages/matplotlib/backends/backend_macosx.py", line 179, in start_main_loop
+    with _allow_interrupt_macos():
+  File "/Library/Frameworks/Python.framework/Versions/3.11/lib/python3.11/contextlib.py", line 144, in __exit__
+    next(self.gen)
+  File "/Users/denisbuckley/PycharmProjects/chatgpt_igc/venv/lib/python3.11/site-packages/matplotlib/backend_bases.py", line 1660, in _allow_interrupt
+    old_sigint_handler(*handler_args)
+KeyboardInterrupt

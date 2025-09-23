@@ -6,6 +6,10 @@ circle_clusters_v1r.py - v1o flow restored; adds alt_gained_m & av_climb_ms.
 - Console summary prints: cluster_id, n_segments, turns, duration_min, alt_gained_m, av_climb_ms
 - Plot labels unchanged: "cluster_id, turns, minutes"
 """
+
+# --- ensure outputs dir exists (patched) ---
+import os as _os_patch
+_os_patch.makedirs('/Users/denisbuckley/PycharmProjects/chatgpt_igc/outputs', exist_ok=True)
 import os, sys, argparse, math, logging
 import numpy as np
 import pandas as pd

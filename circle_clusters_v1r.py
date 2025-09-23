@@ -26,6 +26,8 @@ LOG_PATH = os.path.join(DEBUG_DIR, "circle_clusters_debug.log")
 logging.basicConfig(filename=LOG_PATH, level=logging.DEBUG, format="%(asctime)s %(levelname)s %(message)s")
 logger = logging.getLogger(__name__)
 
+
+
 OUT_CSV = "/Users/denisbuckley/PycharmProjects/chatgpt_igc/outputs/circle_clusters_enriched.csv"
 
 DEFAULT_IGC = "2020-11-08 Lumpy Paterson 108645.igc"

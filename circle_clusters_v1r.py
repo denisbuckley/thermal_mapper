@@ -1,8 +1,10 @@
 #!/usr/bin/env python3
 # -*- coding: utf-8 -*-
 """
-circle_clusters_v1m.py — edge-wise outside labels; CSVs -> /outputs; debug -> /debugs; prints summary table.
-Labels show: "cluster_id, total_turns". Markers: black X. Track: light blue.
+circle_clusters_v1r.py - v1o flow restored; adds alt_gained_m & av_climb_ms.
+- CSVs -> /outputs ; debug -> /debugs
+- Console summary prints: cluster_id, n_segments, turns, duration_min, alt_gained_m, av_climb_ms
+- Plot labels unchanged: "cluster_id, turns, minutes"
 """
 import os, sys, argparse, math, logging
 import numpy as np
@@ -23,7 +25,7 @@ logger = logging.getLogger(__name__)
 DEFAULT_IGC = "2020-11-08 Lumpy Paterson 108645.igc"
 
 # --- geo helpers ---
-def meters_per_deg(lat_deg):
+def meters_per_deg(lat_deg: float):
     m_per_deg_lat = 111320.0
     m_per_deg_lon = 111320.0 * max(1e-6, math.cos(math.radians(lat_deg)))
     return m_per_deg_lat, m_per_deg_lon
@@ -67,7 +69,10 @@ def point_segment_distance_xy(px, py, x1, y1, x2, y2):
     return math.hypot(px-projx, py-projy), t, (projx, projy)
 
 # --- IGC minimal ---
-def parse_igc_minimal(path):
+def parse_igc_minimal(path: str) -> pd.DataFrame:
+    if not os.path.exists(path):
+        print(f"ERROR: IGC file does not exist: {path}")
+        sys.exit(2)
     times, lats, lons, alts = [], [], [], []
     with open(path, "r", encoding="utf-8", errors="ignore") as f:
         for line in f:
@@ -81,20 +86,22 @@ def parse_igc_minimal(path):
             lon = lon_ddd + (lon_mm + lon_mmm/1000.0)/60.0
             if lon_hem == "W": lon = -lon
             try:
-                alt = float(line[25:30])
+                alt = float(line[25:30])  # GPS altitude field
             except:
                 alt = np.nan
             t = hh*3600 + mm*60 + ss
             times.append(t); lats.append(lat); lons.append(lon); alts.append(alt)
     df = pd.DataFrame({"t": times, "lat": lats, "lon": lons, "alt": alts}).dropna()
+    if df.empty:
+        return pd.DataFrame(columns=["time_s","lat","lon","alt"])
     t = df["t"].to_numpy().astype(float)
-    jumps = np.where(np.diff(t) < -43200)[0]
+    jumps = np.where(np.diff(t) < -43200)[0]  # midnight rollover
     if len(jumps) > 0:
         t[jumps[0]+1:] += 86400
     df["time_s"] = t
     return df[["time_s","lat","lon","alt"]]
 
-# --- circle detection (minimal thresholds) ---
+# --- circle detection thresholds ---
 C_MIN_ARC_DEG  = 30.0
 C_MIN_RATE_DPS = 2.0
 C_MAX_RATE_DPS = 70.0
@@ -115,7 +122,9 @@ def unwrap_degrees(deg_series):
     rad = np.deg2rad(deg_series)
     return np.rad2deg(np.unwrap(rad))
 
-def detect_circles(df):
+def detect_circles(df: pd.DataFrame) -> pd.DataFrame:
+    if df.empty:
+        return pd.DataFrame(columns=["i_start","i_end","t_start","t_end","dur_s","arc_deg","n_turns","lat","lon"])
     lat = df["lat"].to_numpy(); lon = df["lon"].to_numpy(); t = df["time_s"].to_numpy()
     n = len(df)
     head = np.zeros(n, dtype=float); head[0] = np.nan
@@ -126,6 +135,7 @@ def detect_circles(df):
     dt = np.diff(t, prepend=t[0]); dt[dt <= 0] = np.nan
     dpsi = np.diff(h_unwrap, prepend=h_unwrap[0])
     rate = np.where(np.isfinite(dt), dpsi/np.where(dt==0, np.nan, dt), np.nan)
+    # speed & radius
     dist = np.zeros(n, dtype=float)
     for i in range(1, n):
         dist[i] = haversine_m(lat[i-1], lon[i-1], lat[i], lon[i])
@@ -160,36 +170,71 @@ def detect_circles(df):
         i += 1
     return pd.DataFrame(segments)
 
-# --- clustering ---
-CL_EPS_M     = 400.0
-CL_GAP_S     = 240.0
+# --- clustering with altitude metrics ---
+CL_EPS_M     = 1200.0
+CL_GAP_S     = 360.0
 CL_MIN_COUNT = 1
 
-def cluster_segments(seg_df):
+def cluster_segments(seg_df: pd.DataFrame, df_fix: pd.DataFrame) -> pd.DataFrame:
     if seg_df.empty:
-        return pd.DataFrame(columns=["cluster_id","n_segments","n_turns_sum","dur_s_sum","lat","lon"])
+        return pd.DataFrame(columns=[
+            "cluster_id","n_segments","n_turns_sum","dur_s_sum","lat","lon","alt_gained_m","av_climb_ms"
+        ])
     seg_df = seg_df.sort_values("t_start").reset_index(drop=True)
+
+    def alt_at_index(idx: int) -> float:
+        n = len(df_fix)
+        if n == 0:
+            return float("nan")
+        idx = max(0, min(n-1, int(idx)))
+        return float(df_fix.iloc[idx]["alt"])
+
     clusters = []
-    current = {"ids":[0], "lats":[seg_df.loc[0,"lat"]], "lons":[seg_df.loc[0,"lon"]],
-               "n_turns":seg_df.loc[0,"n_turns"], "dur":seg_df.loc[0,"dur_s"],
-               "t_start":seg_df.loc[0,"t_start"], "t_end":seg_df.loc[0,"t_end"]}
-    def within(a_lat,a_lon,b_lat,b_lon): return haversine_m(a_lat,a_lon,b_lat,b_lon) <= CL_EPS_M
+    i0s = int(seg_df.loc[0, "i_start"]); i0e = int(seg_df.loc[0, "i_end"])
+    current = {
+        "ids": [0],
+        "lats": [seg_df.loc[0, "lat"]],
+        "lons": [seg_df.loc[0, "lon"]],
+        "n_turns": seg_df.loc[0, "n_turns"],
+        "dur": seg_df.loc[0, "dur_s"],
+        "t_start": seg_df.loc[0, "t_start"],
+        "t_end": seg_df.loc[0, "t_end"],
+        "alt_start": alt_at_index(i0s),
+        "alt_end": alt_at_index(i0e),
+    }
+
+    def within(a_lat,a_lon,b_lat,b_lon):
+        return haversine_m(a_lat,a_lon,b_lat,b_lon) <= CL_EPS_M
+
     for i in range(1, len(seg_df)):
         lat_i, lon_i = seg_df.loc[i,"lat"], seg_df.loc[i,"lon"]
         t_gap = seg_df.loc[i,"t_start"] - current["t_end"]
         cent_lat, cent_lon = float(np.mean(current["lats"])), float(np.mean(current["lons"]))
         if t_gap <= CL_GAP_S and within(lat_i, lon_i, cent_lat, cent_lon):
-            current["ids"].append(i); current["lats"].append(lat_i); current["lons"].append(lon_i)
+            current["ids"].append(i)
+            current["lats"].append(lat_i); current["lons"].append(lon_i)
             current["n_turns"] += seg_df.loc[i,"n_turns"]; current["dur"] += seg_df.loc[i,"dur_s"]
             current["t_end"] = max(current["t_end"], seg_df.loc[i,"t_end"])
+            current["alt_end"] = alt_at_index(int(seg_df.loc[i, "i_end"]))
         else:
             clusters.append(current)
-            current = {"ids":[i], "lats":[lat_i], "lons":[lon_i],
-                       "n_turns":seg_df.loc[i,"n_turns"], "dur":seg_df.loc[i,"dur_s"],
-                       "t_start":seg_df.loc[i,"t_start"], "t_end":seg_df.loc[i,"t_end"]}
+            ist, ien = int(seg_df.loc[i, "i_start"]), int(seg_df.loc[i, "i_end"])
+            current = {
+                "ids": [i],
+                "lats": [lat_i], "lons": [lon_i],
+                "n_turns": seg_df.loc[i,"n_turns"],
+                "dur": seg_df.loc[i,"dur_s"],
+                "t_start": seg_df.loc[i,"t_start"],
+                "t_end": seg_df.loc[i,"t_end"],
+                "alt_start": alt_at_index(ist),
+                "alt_end": alt_at_index(ien),
+            }
     clusters.append(current)
+
     rows = []
     for cid, c in enumerate(clusters, 1):
+        alt_gain = float(c["alt_end"] - c["alt_start"]) if (not math.isnan(c["alt_end"]) and not math.isnan(c["alt_start"])) else float("nan")
+        av_climb = (alt_gain / c["dur"]) if (c["dur"] > 0 and not math.isnan(alt_gain)) else float("nan")
         rows.append({
             "cluster_id": cid,
             "n_segments": len(c["ids"]),
@@ -197,6 +242,8 @@ def cluster_segments(seg_df):
             "dur_s_sum": float(c["dur"]),
             "lat": float(np.mean(c["lats"])),
             "lon": float(np.mean(c["lons"])),
+            "alt_gained_m": alt_gain,
+            "av_climb_ms": av_climb,
         })
     out = pd.DataFrame(rows)
     out = out[out["n_segments"] >= CL_MIN_COUNT].reset_index(drop=True)
@@ -233,51 +280,52 @@ def assign_to_edges(track_lat, track_lon, c_lat, c_lon):
         out.append(best[1:])
     return out
 
-def plot_overlay(df, clusters):
+def plot_overlay(df: pd.DataFrame, clusters: pd.DataFrame):
     import matplotlib.pyplot as plt
+    if df.empty:
+        print("No B-records parsed from IGC; nothing to plot.")
+        return
     lat = df["lat"].to_numpy(); lon = df["lon"].to_numpy()
     if lat[0] != lat[-1] or lon[0] != lon[-1]:
         lat = np.concatenate([lat, [lat[0]]])
         lon = np.concatenate([lon, [lon[0]]])
     fig, ax = plt.subplots(figsize=(8,8))
     ax.plot(lon, lat, color="skyblue", lw=1.0, alpha=0.7)
-    for _, r in clusters.iterrows():
-        ax.plot(r["lon"], r["lat"], marker="x", color="black", markersize=6)
-
-    c_lat = clusters["lat"].to_numpy()
-    c_lon = clusters["lon"].to_numpy()
-    assigns = assign_to_edges(lat, lon, c_lat, c_lon)
-
-    by_edge = {}
-    for idx, assign in enumerate(assigns):
-        edge_i, t_on, proj_xy, frame, nvec, tvec, elen = assign
-        by_edge.setdefault(edge_i, []).append((idx, t_on, proj_xy, frame, nvec, tvec, elen))
-
-    for edge_i, items in by_edge.items():
-        items.sort(key=lambda x: x[1])
-        lat0 = 0.5*(lat[edge_i] + lat[(edge_i+1)%len(lat)])
-        lon0 = 0.5*(lon[edge_i] + lon[(edge_i+1)%len(lon)])
-        x1, y1 = to_local_xy(lat[edge_i], lon[edge_i], lat0, lon0)
-        x2, y2 = to_local_xy(lat[(edge_i+1)%len(lat)], lon[(edge_i+1)%len(lon)], lat0, lon0)
-        ex, ey = x2-x1, y2-y1
-        elen = math.hypot(ex, ey) or 1.0
-        tx, ty = ex/elen, ey/elen
-        ccw = polygon_orientation_area(lat, lon) > 0
-        nx, ny = (+ty, -tx) if ccw else (-ty, +tx)
-        nlab = len(items)
-        usable = max(0.0, elen*(1 - 2*MARGIN_FRAC))
-        ds = max(MIN_DS_M, usable / max(1, nlab))
-        start = MARGIN_FRAC * elen
-        for k, (idx, t_on, (projx, projy), frame, _nvec, _tvec, _elen) in enumerate(items):
-            s = min(start + k * ds, elen - MARGIN_FRAC*elen)
-            lx = x1 + tx * s + nx * BASE_OFFSET_M
-            ly = y1 + ty * s + ny * BASE_OFFSET_M
-            llat, llon = from_local_xy(lx, ly, lat0, lon0)
-            r = clusters.iloc[idx]
-            turns_int = int(round(r["n_turns_sum"])) if pd.notna(r["n_turns_sum"]) else 0
-            ax.text(llon, llat, f"{int(r['cluster_id'])}, {turns_int}",
-                    fontsize=8, ha="center", va="bottom", color="black")
-
+    if not clusters.empty:
+        for _, r in clusters.iterrows():
+            ax.plot(r["lon"], r["lat"], marker="x", color="black", markersize=6)
+        c_lat = clusters["lat"].to_numpy()
+        c_lon = clusters["lon"].to_numpy()
+        assigns = assign_to_edges(lat, lon, c_lat, c_lon)
+        by_edge = {}
+        for idx, assign in enumerate(assigns):
+            edge_i, t_on, proj_xy, frame, nvec, tvec, elen = assign
+            by_edge.setdefault(edge_i, []).append((idx, t_on, proj_xy, frame, nvec, tvec, elen))
+        for edge_i, items in by_edge.items():
+            items.sort(key=lambda x: x[1])
+            lat0 = 0.5*(lat[edge_i] + lat[(edge_i+1)%len(lat)])
+            lon0 = 0.5*(lon[edge_i] + lon[(edge_i+1)%len(lon)])
+            x1, y1 = to_local_xy(lat[edge_i], lon[edge_i], lat0, lon0)
+            x2, y2 = to_local_xy(lat[(edge_i+1)%len(lat)], lon[(edge_i+1)%len(lon)], lat0, lon0)
+            ex, ey = x2-x1, y2-y1
+            elen = math.hypot(ex, ey) or 1.0
+            tx, ty = ex/elen, ey/elen
+            ccw = polygon_orientation_area(lat, lon) > 0
+            nx, ny = (+ty, -tx) if ccw else (-ty, +tx)
+            nlab = len(items)
+            usable = max(0.0, elen*(1 - 2*MARGIN_FRAC))
+            ds = max(MIN_DS_M, usable / max(1, nlab))
+            start = MARGIN_FRAC * elen
+            for k, (idx, t_on, (projx, projy), frame, _nvec, _tvec, _elen) in enumerate(items):
+                s = min(start + k * ds, elen - MARGIN_FRAC*elen)
+                lx = x1 + tx * s + nx * BASE_OFFSET_M
+                ly = y1 + ty * s + ny * BASE_OFFSET_M
+                llat, llon = from_local_xy(lx, ly, lat0, lon0)
+                r = clusters.iloc[idx]
+                turns_int = int(round(r["n_turns_sum"])) if pd.notna(r["n_turns_sum"]) else 0
+                dur_min = r["dur_s_sum"]/60.0 if pd.notna(r["dur_s_sum"]) else 0.0
+                ax.text(llon, llat, f"{int(r['cluster_id'])}, {turns_int}, {dur_min:.1f}m",
+                        fontsize=8, ha="center", va="bottom", color="black")
     ax.set_title("Circle clusters on track")
     ax.set_xlabel("Longitude"); ax.set_ylabel("Latitude"); ax.axis("equal")
     plt.show()
@@ -292,34 +340,36 @@ def main():
     args = ap.parse_args()
 
     igc_path = args.igc or input(f"Enter path to IGC file [default: {DEFAULT_IGC}]: ").strip() or DEFAULT_IGC
+    print(f"IGC: {igc_path}")
     df = parse_igc_minimal(igc_path)
+
     seg_df = detect_circles(df)
-    clusters = cluster_segments(seg_df)
+    clusters = cluster_segments(seg_df, df)
 
     # Write CSVs
     seg_df.to_csv(args.segments_csv, index=False)
     clusters.to_csv(args.clusters_csv, index=False)
 
-    # Print summary table to console
+    # Console summary
+    print(f"Fixes: {len(df)} | Segments: {len(seg_df)} | Clusters: {len(clusters)}")
+    print(f"Segments CSV: {args.segments_csv}")
+    print(f"Clusters CSV: {args.clusters_csv}")
     if not clusters.empty:
-        view = clusters[["cluster_id", "n_segments", "n_turns_sum", "dur_s_sum"]].copy()
+        view = clusters[["cluster_id", "n_segments", "n_turns_sum", "dur_s_sum", "alt_gained_m", "av_climb_ms"]].copy()
         view["n_turns_sum"] = view["n_turns_sum"].round(1)
-        view["dur_min"] = (view["dur_s_sum"] / 60.0).round(1)
-        view = view[["cluster_id", "n_segments", "n_turns_sum", "dur_min"]].rename(
-            columns={"n_turns_sum": "turns", "dur_min": "duration_min"}
+        view["duration_min"] = (view["dur_s_sum"] / 60.0).round(1)
+        view["alt_gained_m"] = view["alt_gained_m"].round(1)
+        view["av_climb_ms"] = view["av_climb_ms"].round(2)
+        view = view[["cluster_id", "n_segments", "n_turns_sum", "duration_min", "alt_gained_m", "av_climb_ms"]].rename(
+            columns={"n_turns_sum": "turns"}
         )
-        print("\nCluster summary:")
+        print("Cluster summary:")
         print(view.to_string(index=False))
     else:
         print("No clusters found.")
 
-    print(f"Segments CSV: {args.segments_csv}")
-    print(f"Clusters CSV: {args.clusters_csv}")
-
     # Plot at end
     plot_overlay(df, clusters)
-
-    print(f"Segments: {len(seg_df)} | Clusters: {len(clusters)}")
 
 if __name__ == "__main__":
     main()

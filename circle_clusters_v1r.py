@@ -22,6 +22,8 @@ LOG_PATH = os.path.join(DEBUG_DIR, "circle_clusters_debug.log")
 logging.basicConfig(filename=LOG_PATH, level=logging.DEBUG, format="%(asctime)s %(levelname)s %(message)s")
 logger = logging.getLogger(__name__)
 
+OUT_CSV = "/Users/denisbuckley/PycharmProjects/chatgpt_igc/outputs/circle_clusters_enriched.csv"
+
 DEFAULT_IGC = "2020-11-08 Lumpy Paterson 108645.igc"
 
 def parse_igc(path: str) -> pd.DataFrame:
@@ -80,7 +82,7 @@ def cluster_segments(seg_df: pd.DataFrame, df_fix: pd.DataFrame) -> pd.DataFrame
 def main():
     ap = argparse.ArgumentParser(description="Circle-based cluster detection with aligned enriched schema")
     ap.add_argument("igc", nargs="?", help="Path to IGC file")
-    ap.add_argument("--clusters-csv", default=os.path.join(OUTPUT_DIR, "circle_clusters_enriched.csv"))
+    ap.add_argument("--clusters-csv", default=os.path.join(OUTPUT_DIR, "outputs/circle_clusters_enriched.csv"))
     args = ap.parse_args()
 
     igc_path = args.igc or input(f"Enter path to IGC file [default: {DEFAULT_IGC}]: ").strip() or DEFAULT_IGC
@@ -89,7 +91,7 @@ def main():
     seg_df = detect_circles(df)
     clusters = cluster_segments(seg_df, df)
 
-    clusters.to_csv(args.clusters_csv, index=False)
+    clusters.to_csv(OUT_CSV, index=False)
     print(f"Clusters saved: {args.clusters_csv}")
     if not clusters.empty:
         print(clusters)

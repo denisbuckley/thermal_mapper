@@ -1,7 +1,0 @@
-
-Compare v2d: raw vs filtered circle clusters
-
-- Exposes both views: raw clusters and filtered (n≥MIN_CLUSTER_SIZE).
-- Writes two CSVs: compare_raw_<ts>.csv and compare_filtered_<ts>.csv.
-- Also exports cluster summaries for both views.
-- Same detectors as overlay; robust dtype/timedelta handling.

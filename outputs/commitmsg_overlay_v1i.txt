@@ -1,7 +1,0 @@
-
-Overlay v1i: cluster-size filter + sized markers
-
-- Adds MIN_CLUSTER_SIZE filter (default 5) to keep only sustained circle clusters.
-- Plots sub-threshold clusters faint grey ×; sized black × for n≥MIN_CLUSTER_SIZE.
-- Keeps altitude clusters (orange ×, T#) and raw circle midpoints (green ×).
-- Writes richer debug with top clusters by n.

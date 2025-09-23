@@ -28,6 +28,8 @@ logger = logging.getLogger(__name__)
 
 
 
+
+
 OUT_CSV = "/Users/denisbuckley/PycharmProjects/chatgpt_igc/outputs/circle_clusters_enriched.csv"
 
 DEFAULT_IGC = "2020-11-08 Lumpy Paterson 108645.igc"
@@ -356,6 +358,13 @@ def main():
 
     # Write CSVs
     seg_df.to_csv(args.segments_csv, index=False)
+    required_cols = [
+        'cluster_id','n_segments','n_turns_sum','duration_min',
+        'alt_gained_m','av_climb_ms','lat','lon','t_start','t_end']
+    for col in required_cols:
+        if col not in clusters.columns:
+            clusters[col] = np.nan
+    clusters = clusters[required_cols]
     clusters.to_csv(OUT_CSV, index=False)
 
     # Console summary

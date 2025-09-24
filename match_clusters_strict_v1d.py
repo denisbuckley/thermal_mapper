@@ -28,6 +28,16 @@ import numpy as np
 import pandas as pd
 from datetime import datetime
 
+def _debug_df(name, path, df):
+    try:
+        print(f"DEBUG {name} file: {path}")
+        print(f"DEBUG {name} columns: {list(df.columns)} rows: {len(df)}")
+        print(df.head())
+    except Exception as e:
+        print(f"DEBUG {name} print error: {e}")
+
+
+
 # === Injected by apply_tuning_patches_v1.py ===
 from tuning_loader import load_tuning, override_globals
 _tuning = load_tuning("config/tuning_params.csv")
@@ -82,7 +92,7 @@ def load_enriched():
     circ = latest([os.path.join(OUTPUTS_DIR,"circle_clusters_enriched_*.csv")])
     alti = latest([os.path.join(OUTPUTS_DIR,"altitude_clusters_enriched_*.csv")])
     if not circ or not alti:
-        print("[match_strict v1d] Missing enriched inputs. Run enrichment first.")
+        print("[match_strict v1d] Missing enriched inputs. Run enrichment first. (Check headers: cluster_id,n_segments,n_turns_sum,duration_min,alt_gained_m,av_climb_ms,lat,lon,t_start,t_end)")
         return None, None, None, None
     C = pd.read_csv(circ)
     A = pd.read_csv(alti)

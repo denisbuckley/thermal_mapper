@@ -111,16 +111,16 @@ def match_clusters(dfA: pd.DataFrame, dfB: pd.DataFrame) -> pd.DataFrame:
 
 def main():
     ap = argparse.ArgumentParser(description="Strict cluster matcher (v1d, with normalization/debug)")
-    ap.add_argument("circle_csv", help="Path to circle clusters enriched CSV")
-    ap.add_argument("alt_csv", help="Path to altitude clusters enriched CSV")
-    ap.add_argument("--out", default="outputs/matched_clusters_v1d.csv")
+    ap.add_argument("--circle", default="outputs/circle_clusters_enriched.csv", help="Path to circle clusters enriched CSV")
+    ap.add_argument("--alt", default="outputs/overlay_altitude_clusters.csv", help="Path to altitude clusters enriched CSV")
+    ap.add_argument("--out", default="outputs/matched_clusters_v1d.csv", help="Path to save matches CSV")
     args = ap.parse_args()
 
     # Load
-    circle_df = pd.read_csv(args.circle_csv)
-    _debug_df('circle', args.circle_csv, circle_df)
-    alt_df = pd.read_csv(args.alt_csv)
-    _debug_df('altitude', args.alt_csv, alt_df)
+    circle_df = pd.read_csv(args.circle)
+    _debug_df('circle', args.circle, circle_df)
+    alt_df = pd.read_csv(args.alt)
+    _debug_df('altitude', args.alt, alt_df)
 
     # Normalize to required schema
     circle_df = _normalize_for_match(circle_df, "circle")

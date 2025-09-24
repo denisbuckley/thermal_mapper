@@ -50,10 +50,10 @@ def _normalize_for_match(df, name):
     print(f"NORMALIZED {name} columns: {list(df.columns)} rows: {len(df)}")
     return df
 
-# ---- Matcher params (same as v1c) ----
-EPS_M = 2000.0          # max spatial distance for cluster centres
-MIN_OVL_FRAC = 0.20     # min overlap fraction in time
-MAX_TIME_GAP_S = 900.0  # max allowed time gap
+# ---- Loosened matcher params ----
+EPS_M = 3000.0          # max spatial distance for cluster centres (meters)
+MIN_OVL_FRAC = 0.05     # min overlap fraction in time
+MAX_TIME_GAP_S = 1800.0 # max allowed time gap (seconds)
 
 def haversine_m(lat1, lon1, lat2, lon2):
     R = 6371000.0
@@ -70,29 +70,21 @@ def overlap_frac(a_start, a_end, b_start, b_end):
     durA = max(1.0, a_end - a_start)
     durB = max(1.0, b_end - b_start)
     min_dur = min(durA, durB)
-    return overlap / min_dur
+    return overlap / min_dur if min_dur > 0 else 0.0
 
-def match_clusters(dfA: pd.DataFrame, dfB: pd.DataFrame) -> pd.DataFrame:
-    matches = []
+def all_pairs(dfA: pd.DataFrame, dfB: pd.DataFrame) -> pd.DataFrame:
+    rows = []
     for _, a in dfA.iterrows():
         for _, b in dfB.iterrows():
-            # Both need lat/lon and times to match
+            # Skip if missing essentials
             if pd.isna(a['lat']) or pd.isna(a['lon']) or pd.isna(b['lat']) or pd.isna(b['lon']):
                 continue
             if pd.isna(a['t_start']) or pd.isna(a['t_end']) or pd.isna(b['t_start']) or pd.isna(b['t_end']):
                 continue
-
             d = haversine_m(a['lat'], a['lon'], b['lat'], b['lon'])
-            if d > EPS_M:
-                continue
             ovl = overlap_frac(a['t_start'], a['t_end'], b['t_start'], b['t_end'])
-            if ovl < MIN_OVL_FRAC:
-                continue
             t_gap = abs(a['t_start'] - b['t_start'])
-            if t_gap > MAX_TIME_GAP_S:
-                continue
-
-            matches.append({
+            rows.append({
                 "A_id": a['cluster_id'],
                 "B_id": b['cluster_id'],
                 "dist_m": d,
@@ -107,13 +99,24 @@ def match_clusters(dfA: pd.DataFrame, dfB: pd.DataFrame) -> pd.DataFrame:
                 "A_av_climb_ms": a.get("av_climb_ms", np.nan),
                 "B_av_climb_ms": b.get("av_climb_ms", np.nan),
             })
-    return pd.DataFrame(matches)
+    return pd.DataFrame(rows)
+
+def match_pairs(pairs_df: pd.DataFrame) -> pd.DataFrame:
+    if pairs_df.empty:
+        return pairs_df
+    strict = pairs_df[
+        (pairs_df["dist_m"] <= EPS_M) &
+        (pairs_df["ovl_frac"] >= MIN_OVL_FRAC) &
+        (pairs_df["t_gap_s"] <= MAX_TIME_GAP_S)
+    ].copy()
+    return strict
 
 def main():
-    ap = argparse.ArgumentParser(description="Strict cluster matcher (v1d, with normalization/debug)")
+    ap = argparse.ArgumentParser(description="Strict cluster matcher (v1d, with normalization/debug + loosened thresholds)")
     ap.add_argument("--circle", default="outputs/circle_clusters_enriched.csv", help="Path to circle clusters enriched CSV")
     ap.add_argument("--alt", default="outputs/overlay_altitude_clusters.csv", help="Path to altitude clusters enriched CSV")
-    ap.add_argument("--out", default="outputs/matched_clusters_v1d.csv", help="Path to save matches CSV")
+    ap.add_argument("--out", default="outputs/matched_clusters_v1d.csv", help="Path to save strict matches CSV")
+    ap.add_argument("--debug-pairs", action="store_true", help="Also save all candidate pairs with metrics to outputs/matched_pairs_debug.csv")
     args = ap.parse_args()
 
     # Load
@@ -122,7 +125,7 @@ def main():
     alt_df = pd.read_csv(args.alt)
     _debug_df('altitude', args.alt, alt_df)
 
-    # Normalize to required schema
+    # Normalize
     circle_df = _normalize_for_match(circle_df, "circle")
     alt_df = _normalize_for_match(alt_df, "altitude")
 
@@ -132,19 +135,28 @@ def main():
 
     print(f"[match_strict v1d] Params: EPS_M={EPS_M} m | MIN_OVL_FRAC={MIN_OVL_FRAC} | MAX_TIME_GAP_S={MAX_TIME_GAP_S}s")
 
-    # Run matching
-    matches = match_clusters(circle_df, alt_df)
+    # Build all candidate pairs
+    pairs = all_pairs(circle_df, alt_df)
+    print(f"[match_strict v1d] Candidate pairs built: {len(pairs)}")
 
-    # Save
-    out_path = args.out
-    os.makedirs(os.path.dirname(out_path), exist_ok=True)
-    matches.to_csv(out_path, index=False)
+    # Save debug pairs if requested
+    if args.debug_pairs:
+        os.makedirs("outputs", exist_ok=True)
+        debug_path = "outputs/matched_pairs_debug.csv"
+        pairs.to_csv(debug_path, index=False)
+        print(f"[match_strict v1d] Wrote all pairs to {debug_path}")
 
-    print(f"[match_strict v1d] Candidate pairs: {len(circle_df)*len(alt_df)}")
-    print(f"[match_strict v1d] Strict 1:1 matches: {len(matches)}")
-    print(f"Output CSV: {out_path}")
-    if not matches.empty:
-        print(matches.head())
+    # Filter strict matches
+    strict = match_pairs(pairs)
+
+    # Save matches
+    os.makedirs(os.path.dirname(args.out), exist_ok=True)
+    strict.to_csv(args.out, index=False)
+
+    print(f"[match_strict v1d] Strict 1:1 matches: {len(strict)}")
+    print(f"Output CSV: {args.out}")
+    if not strict.empty:
+        print(strict.head())
 
 if __name__ == "__main__":
     main()

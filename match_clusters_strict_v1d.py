@@ -28,7 +28,53 @@ import numpy as np
 import pandas as pd
 from datetime import datetime
 
-def _debug_df(name, path, df):
+def 
+
+def _normalize_for_match(df, name):
+"
+"    # Accept common alternates and coerce to required schema
+"
+"    rename_map = {
+"
+"        'dur_s_sum': 'duration_min',  # we'll convert seconds->minutes below if values look like seconds
+"
+"    }
+"
+"    df = df.rename(columns=rename_map)
+"
+"    required = ['cluster_id','n_segments','n_turns_sum','duration_min','alt_gained_m','av_climb_ms','lat','lon','t_start','t_end']
+"
+"    # Add any missing columns as NaN so matcher can proceed
+"
+"    for col in required:
+"
+"        if col not in df.columns:
+"
+"            df[col] = float('nan')
+"
+"    # If duration_min looks like large seconds, convert to minutes heuristically
+"
+"    try:
+"
+"        if df['duration_min'].max(skipna=True) and df['duration_min'].max(skipna=True) > 180:  # >3 minutes means probably seconds
+"
+"            df['duration_min'] = df['duration_min'] / 60.0
+"
+"    except Exception:
+"
+"        pass
+"
+"    # Enforce column order
+"
+"    df = df[required]
+"
+"    # Debug
+"
+"    print(f"NORMALIZED {name} columns: {list(df.columns)} rows: {len(df)}")
+"
+"    return df
+"
+_debug_df(name, path, df):
     try:
         print(f"DEBUG {name} file: {path}")
         print(f"DEBUG {name} columns: {list(df.columns)} rows: {len(df)}")
@@ -92,7 +138,7 @@ def load_enriched():
     circ = latest([os.path.join(OUTPUTS_DIR,"circle_clusters_enriched_*.csv")])
     alti = latest([os.path.join(OUTPUTS_DIR,"altitude_clusters_enriched_*.csv")])
     if not circ or not alti:
-        print("[match_strict v1d] Missing enriched inputs. Run enrichment first. (Check headers: cluster_id,n_segments,n_turns_sum,duration_min,alt_gained_m,av_climb_ms,lat,lon,t_start,t_end)")
+        print("[match_strict v1d] Missing enriched inputs after normalization (empty data). Ensure detectors produced non-empty CSVs.")
         return None, None, None, None
     C = pd.read_csv(circ)
     A = pd.read_csv(alti)

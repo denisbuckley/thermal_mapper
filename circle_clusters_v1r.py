@@ -6,13 +6,21 @@ circle_clusters_v1r.py - v1o flow restored; adds alt_gained_m & av_climb_ms.
 - Console summary prints: cluster_id, n_segments, turns, duration_min, alt_gained_m, av_climb_ms
 - Plot labels unchanged: "cluster_id, turns, minutes"
 """
-
-# --- ensure outputs dir exists (patched) ---
-import os as _os_patch
-_os_patch.makedirs('/Users/denisbuckley/PycharmProjects/chatgpt_igc/outputs', exist_ok=True)
 import os, sys, argparse, math, logging
 import numpy as np
 import pandas as pd
+
+# --- helper: haversine meters (for nearest segment lookup) ---
+import math as _math
+def _hav_m(lat1, lon1, lat2, lon2):
+    R = 6371000.0
+    p1, p2 = _math.radians(lat1), _math.radians(lat2)
+    dphi = _math.radians(lat2 - lat1)
+    dlmb = _math.radians(lon2 - lon1)
+    a = _math.sin(dphi/2.0)**2 + _math.cos(p1)*_math.cos(p2)*_math.sin(dlmb/2.0)**2
+    return 2*R*_math.asin((_math.sqrt(a)))
+
+
 
 # --- fixed project paths ---
 PROJECT_ROOT = "/Users/denisbuckley/PycharmProjects/chatgpt_igc"
@@ -377,3 +385,37 @@ def main():
 
 if __name__ == "__main__":
     main()
+
+
+# --- fill missing t_start/t_end from nearest circling segment ---
+def _fill_times_from_segments(clusters_df, seg_df):
+    if clusters_df.empty or seg_df.empty:
+        return clusters_df
+    # ensure required cols exist
+    for c in ['t_start','t_end']:
+        if c not in clusters_df.columns:
+            clusters_df[c] = float('nan')
+    # precompute segment centroids
+    s_lat = seg_df['lat'].to_numpy()
+    s_lon = seg_df['lon'].to_numpy()
+    s_t0  = seg_df['t_start'].to_numpy() if 't_start' in seg_df.columns else None
+    s_t1  = seg_df['t_end'].to_numpy() if 't_end' in seg_df.columns else None
+    if s_t0 is None or s_t1 is None:
+        return clusters_df
+    for i in range(len(clusters_df)):
+        if not (pd.isna(clusters_df.at[i,'t_start']) or pd.isna(clusters_df.at[i,'t_end'])):
+            continue
+        clat = clusters_df.at[i,'lat']; clon = clusters_df.at[i,'lon']
+        if pd.isna(clat) or pd.isna(clon):
+            continue
+        # find nearest segment by distance
+        best_j = None; best_d = 1e18
+        for j in range(len(seg_df)):
+            d = _hav_m(clat, clon, s_lat[j], s_lon[j])
+            if d < best_d:
+                best_d = d; best_j = j
+        if best_j is not None:
+            clusters_df.at[i,'t_start'] = s_t0[best_j]
+            clusters_df.at[i,'t_end']   = s_t1[best_j]
+    return clusters_df
+

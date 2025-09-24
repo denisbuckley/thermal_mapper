@@ -332,6 +332,88 @@ def plot_overlay(df: pd.DataFrame, clusters: pd.DataFrame):
     plt.close(fig)
 
 # --- main ---
+
+# --- compute per-circle directly from B-record fixes ---
+import numpy as _np
+import pandas as _pd
+import math as _math
+
+def _bearing_deg(lat1, lon1, lat2, lon2):
+    phi1 = _math.radians(lat1); phi2 = _math.radians(lat2)
+    dlon = _math.radians(lon2 - lon1)
+    y = _math.sin(dlon) * _math.cos(phi2)
+    x = _math.cos(phi1)*_math.sin(phi2) - _math.sin(phi1)*_math.cos(phi2)*_math.cos(dlon)
+    brng = (_math.degrees(_math.atan2(y, x)) + 360.0) % 360.0
+    return brng
+
+def _unwrap_angles(angs):
+    out = [angs[0]]
+    for a in angs[1:]:
+        prev = out[-1]
+        da = a - (prev % 360.0)
+        if da > 180: da -= 360
+        if da <= -180: da += 360
+        out.append(prev + da)
+    return _np.array(out, dtype=float)
+
+def _compute_circles_from_fixes(df_fix: _pd.DataFrame, min_radius_m=8.0, min_duration_s=6.0):
+    lat = _pd.to_numeric(df_fix['lat'], errors='coerce').to_numpy()
+    lon = _pd.to_numeric(df_fix['lon'], errors='coerce').to_numpy()
+    alt = _pd.to_numeric(df_fix['alt'], errors='coerce').to_numpy() if 'alt' in df_fix.columns else _pd.to_numeric(df_fix['gps_alt'], errors='coerce').to_numpy()
+    t   = _pd.to_numeric(df_fix['t'], errors='coerce').to_numpy()
+    n = len(df_fix)
+    br = _np.zeros(n, dtype=float)
+    for i in range(1, n):
+        br[i] = _bearing_deg(lat[i-1], lon[i-1], lat[i], lon[i])
+    uw = _unwrap_angles(br)
+    circles = []
+    start_idx = 0
+    circle_id = 0
+    g = 9.81
+    i = 1
+    def _hav_m(a,b,c,d):
+        R=6371000.0
+        import math as m
+        p1=m.radians(a); p2=m.radians(c)
+        dphi=m.radians(c-a); dl=m.radians(d-b)
+        A=m.sin(dphi/2)**2 + m.cos(p1)*m.cos(p2)*m.sin(dl/2)**2
+        return 2*R*m.asin(m.sqrt(A))
+    while i < n:
+        rot = abs(uw[i] - uw[start_idx])
+        if rot >= 360.0:
+            i0, i1 = start_idx, i
+            dur = t[i1] - t[i0]
+            if dur >= min_duration_s and dur > 0:
+                seg_d = 0.0
+                for k in range(i0+1, i1+1):
+                    seg_d += _hav_m(lat[k-1], lon[k-1], lat[k], lon[k])
+                v_mean = seg_d/dur if dur>0 else _np.nan
+                omega = 2*_math.pi/dur
+                radius = (v_mean/omega) if (omega>0) else _np.nan
+                if _np.isnan(radius) or radius < min_radius_m:
+                    radius = _np.nan
+                bank = _math.degrees(_math.atan((v_mean**2)/(g*radius))) if (radius and _np.isfinite(radius)) else _np.nan
+                alt_gain = (alt[i1]-alt[i0]) if (_np.isfinite(alt[i1]) and _np.isfinite(alt[i0])) else _np.nan
+                climb = alt_gain/dur if (dur>0 and _np.isfinite(alt_gain)) else _np.nan
+                circles.append({
+                    "circle_id": circle_id,
+                    "seg_id": None,
+                    "t_start": t[i0],
+                    "t_end": t[i1],
+                    "duration_s": dur,
+                    "avg_speed_kmh": v_mean*3.6 if _np.isfinite(v_mean) else _np.nan,
+                    "alt_gained_m": alt_gain,
+                    "climb_rate_ms": climb,
+                    "turn_radius_m": radius,
+                    "bank_angle_deg": bank,
+                    "lat": float(_np.nanmean(lat[i0:i1+1])),
+                    "lon": float(_np.nanmean(lon[i0:i1+1])),
+                })
+                circle_id += 1
+            start_idx = i
+        i += 1
+    return _pd.DataFrame(circles)
+
 def main():
     ap = argparse.ArgumentParser(description="Circles → clusters with edge-wise outside labels; CSVs to /outputs")
     ap.add_argument("igc", nargs="?", help="Path to IGC file")
@@ -344,28 +426,20 @@ def main():
     df = parse_igc_minimal(igc_path)
 
     seg_df = detect_circles(df)
+    circles_df = _compute_circles_from_fixes(df)
     clusters = cluster_segments(seg_df, df)
 
-    os.makedirs("/Users/denisbuckley/PycharmProjects/chatgpt_igc/outputs", exist_ok=True)
     # Write CSVs
-    seg_df.to_csv("/Users/denisbuckley/PycharmProjects/chatgpt_igc/outputs/circle_segments.csv", index=False)
-    clusters_enriched.to_csv("/Users/denisbuckley/PycharmProjects/chatgpt_igc/outputs/circle_clusters_enriched.csv", index=False)
+    os.makedirs("/Users/denisbuckley/PycharmProjects/chatgpt_igc/outputs", exist_ok=True)
+    circles_df.to_csv("/Users/denisbuckley/PycharmProjects/chatgpt_igc/outputs/circles.csv", index=False)
+    seg_df.to_csv(args.segments_csv, index=False)
+    clusters.to_csv(args.clusters_csv, index=False)
 
-    
-# Console summary
-print(f"Fixes: {len(df)} | Segments: {len(seg_df)} | Clusters: {len(clusters_enriched)}")
-print("Segments CSV: /Users/denisbuckley/PycharmProjects/chatgpt_igc/outputs/circle_segments.csv")
-print("Clusters CSV: /Users/denisbuckley/PycharmProjects/chatgpt_igc/outputs/circle_clusters_enriched.csv")
-print("Circles CSV:  /Users/denisbuckley/PycharmProjects/chatgpt_igc/outputs/circles.csv")
-print("Cluster summary:")
-try:
-    print(clusters_enriched[["cluster_id","n_segments","n_turns_sum","duration_min","alt_gained_m","av_climb_ms"]])
-except Exception:
-    print(clusters_enriched.head())
-# Console summary
+    # Console summary
     print(f"Fixes: {len(df)} | Segments: {len(seg_df)} | Clusters: {len(clusters)}")
     print(f"Segments CSV: {args.segments_csv}")
     print(f"Clusters CSV: {args.clusters_csv}")
+    print("Circles CSV:  /Users/denisbuckley/PycharmProjects/chatgpt_igc/outputs/circles.csv")
     if not clusters.empty:
         view = clusters[["cluster_id", "n_segments", "n_turns_sum", "dur_s_sum", "alt_gained_m", "av_climb_ms"]].copy()
         view["n_turns_sum"] = view["n_turns_sum"].round(1)

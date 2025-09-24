@@ -26,12 +26,6 @@ LOG_PATH = os.path.join(DEBUG_DIR, "circle_clusters_debug.log")
 logging.basicConfig(filename=LOG_PATH, level=logging.DEBUG, format="%(asctime)s %(levelname)s %(message)s")
 logger = logging.getLogger(__name__)
 
-
-
-
-
-OUT_CSV = "/Users/denisbuckley/PycharmProjects/chatgpt_igc/outputs/circle_clusters_enriched.csv"
-
 DEFAULT_IGC = "2020-11-08 Lumpy Paterson 108645.igc"
 
 # --- geo helpers ---
@@ -188,7 +182,7 @@ CL_MIN_COUNT = 1
 def cluster_segments(seg_df: pd.DataFrame, df_fix: pd.DataFrame) -> pd.DataFrame:
     if seg_df.empty:
         return pd.DataFrame(columns=[
-            "cluster_id","n_segments","n_turns_sum","duration_min","lat","lon","alt_gained_m","av_climb_ms"
+            "cluster_id","n_segments","n_turns_sum","dur_s_sum","lat","lon","alt_gained_m","av_climb_ms"
         ])
     seg_df = seg_df.sort_values("t_start").reset_index(drop=True)
 
@@ -249,7 +243,7 @@ def cluster_segments(seg_df: pd.DataFrame, df_fix: pd.DataFrame) -> pd.DataFrame
             "cluster_id": cid,
             "n_segments": len(c["ids"]),
             "n_turns_sum": float(c["n_turns"]),
-            "duration_min": float(c["dur"]),
+            "dur_s_sum": float(c["dur"]),
             "lat": float(np.mean(c["lats"])),
             "lon": float(np.mean(c["lons"])),
             "alt_gained_m": alt_gain,
@@ -333,7 +327,7 @@ def plot_overlay(df: pd.DataFrame, clusters: pd.DataFrame):
                 llat, llon = from_local_xy(lx, ly, lat0, lon0)
                 r = clusters.iloc[idx]
                 turns_int = int(round(r["n_turns_sum"])) if pd.notna(r["n_turns_sum"]) else 0
-                dur_min = r["duration_min"]/60.0 if pd.notna(r["duration_min"]) else 0.0
+                dur_min = r["dur_s_sum"]/60.0 if pd.notna(r["dur_s_sum"]) else 0.0
                 ax.text(llon, llat, f"{int(r['cluster_id'])}, {turns_int}, {dur_min:.1f}m",
                         fontsize=8, ha="center", va="bottom", color="black")
     ax.set_title("Circle clusters on track")
@@ -358,23 +352,16 @@ def main():
 
     # Write CSVs
     seg_df.to_csv(args.segments_csv, index=False)
-    required_cols = [
-        'cluster_id','n_segments','n_turns_sum','duration_min',
-        'alt_gained_m','av_climb_ms','lat','lon','t_start','t_end']
-    for col in required_cols:
-        if col not in clusters.columns:
-            clusters[col] = np.nan
-    clusters = clusters[required_cols]
-    clusters.to_csv(OUT_CSV, index=False)
+    clusters.to_csv(args.clusters_csv, index=False)
 
     # Console summary
     print(f"Fixes: {len(df)} | Segments: {len(seg_df)} | Clusters: {len(clusters)}")
     print(f"Segments CSV: {args.segments_csv}")
     print(f"Clusters CSV: {args.clusters_csv}")
     if not clusters.empty:
-        view = clusters[["cluster_id", "n_segments", "n_turns_sum", "duration_min", "alt_gained_m", "av_climb_ms"]].copy()
+        view = clusters[["cluster_id", "n_segments", "n_turns_sum", "dur_s_sum", "alt_gained_m", "av_climb_ms"]].copy()
         view["n_turns_sum"] = view["n_turns_sum"].round(1)
-        view["duration_min"] = (view["duration_min"] / 60.0).round(1)
+        view["duration_min"] = (view["dur_s_sum"] / 60.0).round(1)
         view["alt_gained_m"] = view["alt_gained_m"].round(1)
         view["av_climb_ms"] = view["av_climb_ms"].round(2)
         view = view[["cluster_id", "n_segments", "n_turns_sum", "duration_min", "alt_gained_m", "av_climb_ms"]].rename(

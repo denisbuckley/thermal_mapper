@@ -256,6 +256,8 @@ def cluster_segments(seg_df: pd.DataFrame, df_fix: pd.DataFrame) -> pd.DataFrame
             "lon": float(np.mean(c["lons"])),
             "alt_gained_m": alt_gain,
             "av_climb_ms": av_climb,
+            "t_start": float(c["t_start"]),
+            "t_end": float(c["t_end"]),
         })
     out = pd.DataFrame(rows)
     out = out[out["n_segments"] >= CL_MIN_COUNT].reset_index(drop=True)

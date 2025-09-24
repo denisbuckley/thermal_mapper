@@ -1,80 +1,14 @@
-
 #!/usr/bin/env python3
-"""
-match_clusters_strict_v1c.py
+# -*- coding: utf-8 -*-
 
-Strict 1:1 matching between *circle* and *altitude* ENRICHED clusters, now
-including gains and climb rates for BOTH sides in the CSV and console output.
-
-Inputs (auto-detected from ./outputs):
-  - circle_clusters_enriched_*.csv  (must include: cluster_id, lat, lon, start_time, end_time, gain_m, avg_rate_mps)
-  - altitude_clusters_enriched_*.csv (same fields)
-
-Outputs:
-  - outputs/matched_clusters_<ts>.csv
-      Columns (compact headers for console/page fit):
-        c_id, a_id, d_km, ovl_s, ovl_f, gap_s,
-        c_gain_m, c_rate, a_gain_m, a_rate
-  - Console: aligned table with compact labels
-
-Params (tweak as needed):
-  EPS_M=2000.0        # max separation (meters)
-  MIN_OVL_FRAC=0.20   # min overlap as fraction of the shorter interval
-  MAX_TIME_GAP_S=900  # if no overlap, allow up to 15 min gap
-"""
-
-import os, glob, math
-import numpy as np
+import os
+import sys
+import argparse
 import pandas as pd
-from datetime import datetime
+import numpy as np
 
-def 
-
-def _normalize_for_match(df, name):
-"
-"    # Accept common alternates and coerce to required schema
-"
-"    rename_map = {
-"
-"        'dur_s_sum': 'duration_min',  # we'll convert seconds->minutes below if values look like seconds
-"
-"    }
-"
-"    df = df.rename(columns=rename_map)
-"
-"    required = ['cluster_id','n_segments','n_turns_sum','duration_min','alt_gained_m','av_climb_ms','lat','lon','t_start','t_end']
-"
-"    # Add any missing columns as NaN so matcher can proceed
-"
-"    for col in required:
-"
-"        if col not in df.columns:
-"
-"            df[col] = float('nan')
-"
-"    # If duration_min looks like large seconds, convert to minutes heuristically
-"
-"    try:
-"
-"        if df['duration_min'].max(skipna=True) and df['duration_min'].max(skipna=True) > 180:  # >3 minutes means probably seconds
-"
-"            df['duration_min'] = df['duration_min'] / 60.0
-"
-"    except Exception:
-"
-"        pass
-"
-"    # Enforce column order
-"
-"    df = df[required]
-"
-"    # Debug
-"
-"    print(f"NORMALIZED {name} columns: {list(df.columns)} rows: {len(df)}")
-"
-"    return df
-"
-_debug_df(name, path, df):
+# ---- Debug helpers ----
+def _debug_df(name, path, df):
     try:
         print(f"DEBUG {name} file: {path}")
         print(f"DEBUG {name} columns: {list(df.columns)} rows: {len(df)}")
@@ -82,180 +16,135 @@ _debug_df(name, path, df):
     except Exception as e:
         print(f"DEBUG {name} print error: {e}")
 
+def _normalize_for_match(df, name):
+    """Coerce inputs to required matcher schema & order."""
+    # Rename common alternates
+    rename_map = {
+        'dur_s_sum': 'duration_min',
+    }
+    df = df.rename(columns=rename_map)
 
+    required = ['cluster_id','n_segments','n_turns_sum','duration_min',
+                'alt_gained_m','av_climb_ms','lat','lon','t_start','t_end']
 
-# === Injected by apply_tuning_patches_v1.py ===
-from tuning_loader import load_tuning, override_globals
-_tuning = load_tuning("config/tuning_params.csv")
-override_globals(globals(), _tuning, allowed={
-    "EPS_M","MIN_OVL_FRAC","MAX_TIME_GAP_S"
-})
+    # Add any missing columns as NaN so matcher can proceed
+    for col in required:
+        if col not in df.columns:
+            df[col] = np.nan
 
+    # Heuristic: if duration_min looks like seconds, convert to minutes
+    try:
+        mx = pd.to_numeric(df['duration_min'], errors='coerce').max()
+        if pd.notna(mx) and mx > 180:  # >3 minutes -> likely seconds
+            df['duration_min'] = pd.to_numeric(df['duration_min'], errors='coerce') / 60.0
+    except Exception:
+        pass
 
+    # Enforce order & types
+    df = df[required]
+    for col in ['cluster_id','n_segments']:
+        df[col] = pd.to_numeric(df[col], errors='coerce')
+    for col in ['n_turns_sum','duration_min','alt_gained_m','av_climb_ms','lat','lon','t_start','t_end']:
+        df[col] = pd.to_numeric(df[col], errors='coerce')
 
-# ---------------- Parameters ----------------
-EPS_M = 2000.0          # spatial threshold in meters (2 km)
-MIN_OVL_FRAC = 0.20     # min required overlap fraction of the SHORTER interval
-MAX_TIME_GAP_S = 15*60  # if no overlap, allow up to 15 minutes gap
+    print(f"NORMALIZED {name} columns: {list(df.columns)} rows: {len(df)}")
+    return df
 
-OUTPUTS_DIR = "outputs"
-
-# -------------- Helpers ---------------------
-def latest(glob_patts):
-    files = []
-    for patt in glob_patts:
-        files.extend(glob.glob(patt))
-    if not files: return None
-    files.sort(key=lambda p: os.path.getmtime(p), reverse=True)
-    return files[0]
-
-def to_ts(s):
-    return pd.to_datetime(s, utc=True, errors='coerce')
+# ---- Matcher params (same as v1c) ----
+EPS_M = 2000.0          # max spatial distance for cluster centres
+MIN_OVL_FRAC = 0.20     # min overlap fraction in time
+MAX_TIME_GAP_S = 900.0  # max allowed time gap
 
 def haversine_m(lat1, lon1, lat2, lon2):
     R = 6371000.0
-    p1 = np.radians(lat1); p2 = np.radians(lat2)
-    dphi = np.radians(lat2-lat1)
-    dlmb = np.radians(lon2-lon1)
+    p1, p2 = np.radians(lat1), np.radians(lat2)
+    dphi = np.radians(lat2 - lat1)
+    dlmb = np.radians(lon2 - lon1)
     a = np.sin(dphi/2.0)**2 + np.cos(p1)*np.cos(p2)*np.sin(dlmb/2.0)**2
     return 2*R*np.arcsin(np.sqrt(a))
 
-def time_overlap_and_gap(a0, a1, b0, b1):
-    """Return (overlap_s, gap_s) with gap_s=0 when overlapping."""
-    latest_start = max(a0, b0)
-    earliest_end = min(a1, b1)
-    ovl = (earliest_end - latest_start).total_seconds()
-    if ovl > 0:
-        return ovl, 0.0
-    # no overlap → positive gap
-    if a0 > b1:
-        gap = (a0 - b1).total_seconds()
-    else:
-        gap = (b0 - a1).total_seconds()
-    return 0.0, gap
+def overlap_frac(a_start, a_end, b_start, b_end):
+    latest_start = max(a_start, b_start)
+    earliest_end = min(a_end, b_end)
+    overlap = max(0.0, earliest_end - latest_start)
+    durA = max(1.0, a_end - a_start)
+    durB = max(1.0, b_end - b_start)
+    min_dur = min(durA, durB)
+    return overlap / min_dur
 
-def load_enriched():
-    circ = latest([os.path.join(OUTPUTS_DIR,"circle_clusters_enriched_*.csv")])
-    alti = latest([os.path.join(OUTPUTS_DIR,"altitude_clusters_enriched_*.csv")])
-    if not circ or not alti:
-        print("[match_strict v1d] Missing enriched inputs after normalization (empty data). Ensure detectors produced non-empty CSVs.")
-        return None, None, None, None
-    C = pd.read_csv(circ)
-    A = pd.read_csv(alti)
-    # normalize/ensure columns
-    for df in (C, A):
-        if 'cluster_id' not in df.columns and 'thermal_id' in df.columns:
-            df.rename(columns={'thermal_id':'cluster_id'}, inplace=True)
-        for col in ('start_time','end_time'):
-            df[col] = to_ts(df[col])
-        # fill missing metrics if absent
-        if 'gain_m' not in df.columns:
-            df['gain_m'] = np.nan
-        if 'avg_rate_mps' not in df.columns:
-            df['avg_rate_mps'] = np.nan
-    return C, A, circ, alti
-
-# -------------- Matching --------------------
-def build_candidates(C, A):
-    cands = []
-    for _, cr in C.iterrows():
-        for _, ar in A.iterrows():
-            d_m = float(haversine_m(cr['lat'], cr['lon'], ar['lat'], ar['lon']))
-            if d_m > EPS_M:
+def match_clusters(dfA: pd.DataFrame, dfB: pd.DataFrame) -> pd.DataFrame:
+    matches = []
+    for _, a in dfA.iterrows():
+        for _, b in dfB.iterrows():
+            # Both need lat/lon and times to match
+            if pd.isna(a['lat']) or pd.isna(a['lon']) or pd.isna(b['lat']) or pd.isna(b['lon']):
                 continue
-            ovl_s, gap_s = time_overlap_and_gap(cr['start_time'], cr['end_time'],
-                                                ar['start_time'], ar['end_time'])
-            c_dur = max(1.0, float((cr['end_time'] - cr['start_time']).total_seconds()))
-            a_dur = max(1.0, float((ar['end_time'] - ar['start_time']).total_seconds()))
-            shorter = min(c_dur, a_dur)
-            ovl_frac = max(0.0, ovl_s / shorter)
-
-            if ovl_s <= 0 and gap_s > MAX_TIME_GAP_S:
-                continue
-            if ovl_s > 0 and ovl_frac < MIN_OVL_FRAC:
+            if pd.isna(a['t_start']) or pd.isna(a['t_end']) or pd.isna(b['t_start']) or pd.isna(b['t_end']):
                 continue
 
-            gain_diff = abs(float(cr.get('gain_m', np.nan)) - float(ar.get('gain_m', np.nan)))
-            rate_diff = abs(float(cr.get('avg_rate_mps', np.nan)) - float(ar.get('avg_rate_mps', np.nan)))
-            gain_pen = 0.0 if (math.isnan(gain_diff)) else min(1.0, gain_diff / 200.0)
-            rate_pen = 0.0 if (math.isnan(rate_diff)) else min(1.0, rate_diff / 5.0)
-            score = (d_m/1000.0, -ovl_frac, gain_pen + 0.5*rate_pen)
+            d = haversine_m(a['lat'], a['lon'], b['lat'], b['lon'])
+            if d > EPS_M:
+                continue
+            ovl = overlap_frac(a['t_start'], a['t_end'], b['t_start'], b['t_end'])
+            if ovl < MIN_OVL_FRAC:
+                continue
+            t_gap = abs(a['t_start'] - b['t_start'])
+            if t_gap > MAX_TIME_GAP_S:
+                continue
 
-            cands.append(dict(
-                circle_id = int(cr['cluster_id']),
-                alt_id    = int(ar['cluster_id']),
-                dist_m    = d_m,
-                overlap_s = ovl_s,
-                overlap_frac = ovl_frac,
-                time_gap_s = gap_s,
-                c_gain_m  = float(cr.get('gain_m', np.nan)),
-                c_rate    = float(cr.get('avg_rate_mps', np.nan)),
-                a_gain_m  = float(ar.get('gain_m', np.nan)),
-                a_rate    = float(ar.get('avg_rate_mps', np.nan)),
-                score = score
-            ))
-    cands.sort(key=lambda x: x['score'])
-    return cands
+            matches.append({
+                "A_id": a['cluster_id'],
+                "B_id": b['cluster_id'],
+                "dist_m": d,
+                "ovl_frac": ovl,
+                "t_gap_s": t_gap,
+                "A_turns": a.get("n_turns_sum", np.nan),
+                "B_turns": b.get("n_turns_sum", np.nan),
+                "A_duration_min": a.get("duration_min", np.nan),
+                "B_duration_min": b.get("duration_min", np.nan),
+                "A_alt_gained_m": a.get("alt_gained_m", np.nan),
+                "B_alt_gained_m": b.get("alt_gained_m", np.nan),
+                "A_av_climb_ms": a.get("av_climb_ms", np.nan),
+                "B_av_climb_ms": b.get("av_climb_ms", np.nan),
+            })
+    return pd.DataFrame(matches)
 
-def greedy_assign(cands):
-    matched_c = set(); matched_a = set(); pairs = []
-    for cand in cands:
-        if cand['circle_id'] in matched_c or cand['alt_id'] in matched_a:
-            continue
-        matched_c.add(cand['circle_id']); matched_a.add(cand['alt_id']); pairs.append(cand)
-    return pairs
-
-# -------------- Runner ----------------------
 def main():
-    C, A, circ_path, alti_path = load_enriched()
-    if C is None: return
+    ap = argparse.ArgumentParser(description="Strict cluster matcher (v1d, with normalization/debug)")
+    ap.add_argument("circle_csv", help="Path to circle clusters enriched CSV")
+    ap.add_argument("alt_csv", help="Path to altitude clusters enriched CSV")
+    ap.add_argument("--out", default="outputs/matched_clusters_v1d.csv")
+    args = ap.parse_args()
 
-    print("[match_strict v1d] Inputs:")
-    print("  Circle enriched:", circ_path)
-    print("  Altitude enriched:", alti_path)
-    print(f"  Params: EPS_M={EPS_M:.0f} m | MIN_OVL_FRAC={MIN_OVL_FRAC:.2f} | MAX_TIME_GAP_S={MAX_TIME_GAP_S:.0f}s")
+    # Load
+    circle_df = pd.read_csv(args.circle_csv)
+    _debug_df('circle', args.circle_csv, circle_df)
+    alt_df = pd.read_csv(args.alt_csv)
+    _debug_df('altitude', args.alt_csv, alt_df)
 
-    cands = build_candidates(C, A)
-    print(f"[match_strict v1d] Candidate pairs: {len(cands)}")
+    # Normalize to required schema
+    circle_df = _normalize_for_match(circle_df, "circle")
+    alt_df = _normalize_for_match(alt_df, "altitude")
 
-    pairs = greedy_assign(cands)
-    print(f"[match_strict v1d] Strict 1:1 matches: {len(pairs)}")
+    if circle_df.empty or alt_df.empty:
+        print("Missing enriched inputs after normalization (empty data). Ensure detectors produced non-empty CSVs.")
+        sys.exit(1)
 
-    rows = []
-    for p in pairs:
-        rows.append(dict(
-            c_id = p['circle_id'],
-            a_id = p['alt_id'],
-            d_km = round(p['dist_m']/1000.0, 3),
-            ovl_s = round(p['overlap_s'], 1),
-            ovl_f = round(p['overlap_frac'], 3),
-            gap_s = round(p['time_gap_s'], 1),
-            c_gain_m = None if math.isnan(p['c_gain_m']) else round(p['c_gain_m'], 1),
-            c_rate   = None if math.isnan(p['c_rate'])   else round(p['c_rate'], 2),
-            a_gain_m = None if math.isnan(p['a_gain_m']) else round(p['a_gain_m'], 1),
-            a_rate   = None if math.isnan(p['a_rate'])   else round(p['a_rate'], 2),
-        ))
-    M = pd.DataFrame(rows)
+    print(f"[match_strict v1d] Params: EPS_M={EPS_M} m | MIN_OVL_FRAC={MIN_OVL_FRAC} | MAX_TIME_GAP_S={MAX_TIME_GAP_S}s")
 
-    os.makedirs(OUTPUTS_DIR, exist_ok=True)
-    ts = datetime.utcnow().strftime("%Y%m%d%H%M%S")
-    out_csv = os.path.join(OUTPUTS_DIR, f"matched_clusters_{ts}.csv")
-    M.to_csv(out_csv, index=False)
-    print(f"[match_strict v1d] Wrote {out_csv}")
+    # Run matching
+    matches = match_clusters(circle_df, alt_df)
 
-    # Console table with compact columns
-    if not M.empty:
-        print("\nc_id  a_id   d_km   ovl_s   ovl_f   gap_s   c_gain  c_rate   a_gain  a_rate")
-        print("----  ----  ------  ------  ------  ------  ------  ------  ------  ------")
-        for _, r in M.iterrows():
-            cg = "" if pd.isna(r['c_gain_m']) else f"{r['c_gain_m']:.1f}"
-            cr = "" if pd.isna(r['c_rate'])   else f"{r['c_rate']:.2f}"
-            ag = "" if pd.isna(r['a_gain_m']) else f"{r['a_gain_m']:.1f}"
-            ar = "" if pd.isna(r['a_rate'])   else f"{r['a_rate']:.2f}"
-            print(f"{int(r['c_id']):4d}  {int(r['a_id']):4d}  {r['d_km']:6.3f}  {r['ovl_s']:6.1f}  {r['ovl_f']:6.3f}"
-                  f"  {r['gap_s']:6.1f}  {cg:>6}  {cr:>6}  {ag:>6}  {ar:>6}")
-    else:
-        print("[match_strict v1d] No matches under current thresholds. Consider widening EPS_M or lowering MIN_OVL_FRAC.")
+    # Save
+    out_path = args.out
+    os.makedirs(os.path.dirname(out_path), exist_ok=True)
+    matches.to_csv(out_path, index=False)
+
+    print(f"[match_strict v1d] Candidate pairs: {len(circle_df)*len(alt_df)}")
+    print(f"[match_strict v1d] Strict 1:1 matches: {len(matches)}")
+    print(f"Output CSV: {out_path}")
+    if not matches.empty:
+        print(matches.head())
 
 if __name__ == "__main__":
     main()

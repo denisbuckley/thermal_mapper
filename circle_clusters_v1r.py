@@ -358,9 +358,33 @@ def main():
     seg_df = detect_circles(df)
     clusters = cluster_segments(seg_df, df)
 
-    # Write CSVs
-    seg_df.to_csv(args.segments_csv, index=False)
-    clusters.to_csv(args.clusters_csv, index=False)
+    
+# Write CSVs
+seg_df.to_csv(args.segments_csv, index=False)
+
+# Enrich & align cluster schema for matcher v1d
+clusters_en = clusters.copy()
+# duration in minutes
+if "dur_s_sum" in clusters_en.columns:
+    clusters_en["duration_min"] = pd.to_numeric(clusters_en["dur_s_sum"], errors="coerce") / 60.0
+elif "duration_min" not in clusters_en.columns:
+    clusters_en["duration_min"] = np.nan
+
+# ensure t_start/t_end by propagating from nearest segment centroid
+clusters_en = _fill_times_from_segments(clusters_en, seg_df)
+
+# final column order
+required_cols = [
+    "cluster_id","n_segments","n_turns_sum","duration_min",
+    "alt_gained_m","av_climb_ms","lat","lon","t_start","t_end"
+]
+for col in required_cols:
+    if col not in clusters_en.columns:
+        clusters_en[col] = np.nan
+clusters_en = clusters_en[required_cols]
+
+clusters_en.to_csv(args.clusters_csv, index=False)
+
 
     # Console summary
     print(f"Fixes: {len(df)} | Segments: {len(seg_df)} | Clusters: {len(clusters)}")

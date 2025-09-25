@@ -45,8 +45,8 @@ def match_clusters(circle_df, alt_df, eps_m=2000.0, min_ovl_frac=0.20, max_time_
     return pd.DataFrame(matches), cand_count
 
 def main():
-    circ_path = "parking/circle_clusters_enriched.csv"
-    alt_path = "parking/overlay_altitude_clusters.csv"
+    circ_path = "outputs/circle_clusters_enriched.csv"
+    alt_path = "outputs/overlay_altitude_clusters.csv"
     if not os.path.exists(circ_path) or not os.path.exists(alt_path):
         print("Missing required inputs. Ensure both circle and altitude cluster CSVs exist in outputs/.")
         return

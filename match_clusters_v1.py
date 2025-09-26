@@ -1,51 +1,71 @@
-
 #!/usr/bin/env python3
-# match_clusters_v1.py
-# Extended matcher: enriches matched_clusters.csv with lat, lon, and strength
+# -*- coding: utf-8 -*-
 
-import sys
-from pathlib import Path
+import os
+import math
 import pandas as pd
 
-OUT_DIR = Path.cwd() / "outputs"
+def haversine_m(lat1, lon1, lat2, lon2):
+    R = 6371000.0
+    from math import radians, sin, cos, asin, sqrt
+    phi1, phi2 = radians(lat1), radians(lat2)
+    dphi = radians(lat2 - lat1)
+    dlambda = radians(lon2 - lon1)
+    a = sin(dphi/2)**2 + cos(phi1)*cos(phi2)*sin(dlambda/2)**2
+    return 2 * R * asin(sqrt(a))
+
+def time_overlap(a_start, a_end, b_start, b_end):
+    latest_start = max(a_start, b_start)
+    earliest_end = min(a_end, b_end)
+    return max(0.0, earliest_end - latest_start)
+
+def match_clusters(circle_df, alt_df, eps_m=2000.0, min_ovl_frac=0.20, max_time_gap=900.0):
+    matches = []
+    cand_count = 0
+    for _, crow in circle_df.iterrows():
+        for _, arow in alt_df.iterrows():
+            d = haversine_m(crow["lat"], crow["lon"], arow["lat"], arow["lon"])
+            if d > eps_m:
+                continue
+            dt_gap = abs(crow["t_start"] - arow["t_start"])
+            if dt_gap > max_time_gap:
+                continue
+            ovl = time_overlap(crow["t_start"], crow["t_end"], arow["t_start"], arow["t_end"])
+            dur_short = min(crow["t_end"] - crow["t_start"], arow["t_end"] - arow["t_start"])
+            frac = (ovl / dur_short) if dur_short > 0 else 0.0
+            cand_count += 1
+            if frac >= min_ovl_frac:
+                matches.append({
+                    "circle_cluster_id": crow["cluster_id"],
+                    "alt_cluster_id": arow["cluster_id"],
+                    "dist_m": d,
+                    "time_overlap_s": ovl,
+                    "overlap_frac": frac
+                })
+    return pd.DataFrame(matches), cand_count
 
 def main():
-    # Input files (relative to outputs/)
-    cpath = OUT_DIR / "circle_clusters_enriched.csv"
-    apath = OUT_DIR / "overlay_altitude_clusters.csv"
-    mpath = OUT_DIR / "matched_clusters.csv"  # base match file
+    circ_path = "outputs/circle_clusters_enriched.csv"
+    alt_path = "outputs/overlay_altitude_clusters.csv"
+    if not os.path.exists(circ_path) or not os.path.exists(alt_path):
+        print("Missing required inputs. Ensure both circle and altitude cluster CSVs exist in outputs/.")
+        return
 
-    if not (cpath.exists() and apath.exists() and mpath.exists()):
-        print("[ERROR] Missing input files for enrichment")
-        sys.exit(2)
+    circle_df = pd.read_csv(circ_path)
+    alt_df = pd.read_csv(alt_path)
 
-    c = pd.read_csv(cpath)
-    a = pd.read_csv(apath)
-    m = pd.read_csv(mpath)
+    print("[match v1] Params: EPS_M=2000 m | MIN_OVL_FRAC=0.20 | MAX_TIME_GAP_S=900 s")
 
-    # Resolve column names
-    lat_col = next((c for c in ["lat","latitude","lat_deg","centroid_lat"] if c in c.columns), None)
-    lon_col = next((c for c in ["lon","longitude","lon_deg","centroid_lon"] if c in c.columns), None)
-    strength_col = next((c for c in ["strength","climb_rate_ms","avg_climb_ms","mean_climb_ms"] if c in a.columns), None)
+    matches_df, cand_count = match_clusters(circle_df, alt_df)
+    strict_count = len(matches_df)
 
-    if not (lat_col and lon_col and strength_col):
-        print("[ERROR] Required columns not found in circle/altitude CSVs")
-        sys.exit(2)
+    os.makedirs("outputs", exist_ok=True)
+    out_path = "outputs/matched_clusters.csv"
+    matches_df.to_csv(out_path, index=False)
 
-    # merge circle coords
-    if "circle_cluster_id" in m.columns and "circle_cluster_id" in c.columns:
-        m = m.merge(c[["circle_cluster_id", lat_col, lon_col]], on="circle_cluster_id", how="left")
-    # merge altitude strength
-    if "alt_cluster_id" in m.columns and "alt_cluster_id" in a.columns:
-        m = m.merge(a[["alt_cluster_id", strength_col]], on="alt_cluster_id", how="left")
-
-    # rename for consistency
-    m = m.rename(columns={lat_col: "lat", lon_col: "lon", strength_col: "strength"})
-
-    # overwrite outputs/matched_clusters.csv with enriched version
-    out_csv = OUT_DIR / "matched_clusters.csv"
-    m.to_csv(out_csv, index=False)
-    print(f"[OK] wrote enriched {out_csv} with lat/lon/strength")
+    print(f"[match v1] Candidate pairs: {cand_count}")
+    print(f"[match v1] Strict matches: {strict_count}")
+    print(f"Wrote {strict_count} matches → {out_path}")
 
 if __name__ == "__main__":
     main()

@@ -12,9 +12,8 @@ import os, sys, argparse, logging
 import numpy as np
 import pandas as pd
 
-PROJECT_ROOT = "/Users/denisbuckley/PycharmProjects/chatgpt_igc"
-OUTPUT_DIR = os.path.join(PROJECT_ROOT, "outputs")
-DEBUG_DIR  = os.path.join(PROJECT_ROOT, "debugs")
+OUTPUT_DIR = "outputs"
+DEBUG_DIR  = "debugs"
 os.makedirs(OUTPUT_DIR, exist_ok=True)
 os.makedirs(DEBUG_DIR, exist_ok=True)
 
@@ -26,6 +25,9 @@ DEFAULT_IGC = "2020-11-08 Lumpy Paterson 108645.igc"
 
 def parse_igc(path: str) -> pd.DataFrame:
     times, lats, lons, alts = [], [], [], []
+    day_offset = 0
+    last_t = None
+
     with open(path, "r", encoding="utf-8", errors="ignore") as f:
         for line in f:
             if not line or line[0] != "B" or len(line) < 35:
@@ -33,16 +35,27 @@ def parse_igc(path: str) -> pd.DataFrame:
             hh, mm, ss = int(line[1:3]), int(line[3:5]), int(line[5:7])
             lat_dd, lat_mm, lat_mmm, lat_hem = int(line[7:9]), int(line[9:11]), int(line[11:14]), line[14]
             lon_ddd, lon_mm, lon_mmm, lon_hem = int(line[15:18]), int(line[18:20]), int(line[20:23]), line[23]
+
             lat = lat_dd + (lat_mm + lat_mmm/1000.0)/60.0
             if lat_hem == "S": lat = -lat
             lon = lon_ddd + (lon_mm + lon_mmm/1000.0)/60.0
             if lon_hem == "W": lon = -lon
+
             try:
                 alt = float(line[25:30])
-            except:
-                alt = np.nan
+            except Exception:
+                continue
+
             t = hh*3600 + mm*60 + ss
-            times.append(t); lats.append(lat); lons.append(lon); alts.append(alt)
+            if last_t is not None and t < last_t:
+                day_offset += 86400  # crossed midnight
+            last_t = t
+
+            times.append(t + day_offset)
+            lats.append(lat)
+            lons.append(lon)
+            alts.append(alt)
+
     df = pd.DataFrame({"time_s": times, "lat": lats, "lon": lons, "alt": alts}).dropna()
     return df
 

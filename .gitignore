@@ -34,3 +34,6 @@ igc/*
 
 # Ignore local flight logs
 igc/*
+
+# data inputs
+igc_all/

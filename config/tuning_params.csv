@@ -1,0 +1,17 @@
+# tuning parameters (sample). Copy to: config/tuning_params.csv
+# Matching
+EPS_M,2000
+MIN_OVL_FRAC,0.20
+MAX_TIME_GAP_S,900
+
+# Circles (guardrails)
+C_MIN_RATE_DPS,4
+C_MAX_RATE_DPS,20
+C_MIN_RADIUS_M,30
+C_MAX_RADIUS_M,600
+MIN_CIRCLE_N,3
+
+# Altitude detector
+ALT_MIN_GAIN_M,60
+ALT_MIN_DUR_S,20
+ALT_SMOOTH_S,10

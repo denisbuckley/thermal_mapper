@@ -1,0 +1,34 @@
+[circles v1e] Parsing IGC: 2020-11-08 Lumpy Paterson 108645.igc
+[circles v1e] Tow detected: 0→483. Excluding tow.
+[circles v1e] Points after tow trim: 8147
+[circles v1e] Cadence ≈ 3.00 s/fix | circles detected: 22
+  circle[0]: idx 615->1597  arc≈-306.7°  dur=2946.0s
+  circle[1]: idx 1605->2330  arc≈300.9°  dur=2115.0s
+  circle[2]: idx 2331->2358  arc≈-338.4°  dur=81.0s
+  circle[3]: idx 2359->2874  arc≈338.6°  dur=1545.0s
+  circle[4]: idx 2875->2984  arc≈-308.9°  dur=327.0s
+  circle[5]: idx 2985->3250  arc≈307.5°  dur=795.0s
+  circle[6]: idx 3253->3289  arc≈341.3°  dur=108.0s
+  circle[7]: idx 3290->3334  arc≈-333.3°  dur=132.0s
+[circles v1e] Wrote circles CSV (with cluster_id): outputs/circles_turns_250910161321.csv (22 rows)
+[circles v1e] Wrote clusters CSV: outputs/circles_clusters_250910161321.csv (22 rows)
+[circles v1e] Wrote cluster separations CSV: outputs/circles_cluster_pairs_250910161321.csv (21 rows)
+Traceback (most recent call last):
+  File "/Users/denisbuckley/PycharmProjects/chatgpt_igc/circles_export_v1e.py", line 379, in <module>
+    main()
+  File "/Users/denisbuckley/PycharmProjects/chatgpt_igc/circles_export_v1e.py", line 374, in main
+    plot_map_with_circles_and_clusters(df, circles, clusters_df, dt)
+  File "/Users/denisbuckley/PycharmProjects/chatgpt_igc/circles_export_v1e.py", line 322, in plot_map_with_circles_and_clusters
+    plt.show()
+  File "/Users/denisbuckley/PycharmProjects/chatgpt_igc/venv/lib/python3.11/site-packages/matplotlib/pyplot.py", line 614, in show
+    return _get_backend_mod().show(*args, **kwargs)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/Users/denisbuckley/PycharmProjects/chatgpt_igc/venv/lib/python3.11/site-packages/matplotlib/backend_bases.py", line 3550, in show
+    cls.mainloop()
+  File "/Users/denisbuckley/PycharmProjects/chatgpt_igc/venv/lib/python3.11/site-packages/matplotlib/backends/backend_macosx.py", line 179, in start_main_loop
+    with _allow_interrupt_macos():
+  File "/Library/Frameworks/Python.framework/Versions/3.11/lib/python3.11/contextlib.py", line 144, in __exit__
+    next(self.gen)
+  File "/Users/denisbuckley/PycharmProjects/chatgpt_igc/venv/lib/python3.11/site-packages/matplotlib/backend_bases.py", line 1660, in _allow_interrupt
+    old_sigint_handler(*handler_args)
+KeyboardInterrupt

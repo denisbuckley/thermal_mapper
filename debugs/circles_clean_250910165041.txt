@@ -1,0 +1,21 @@
+[circles-clean v2] Parsing IGC: 2020-11-08 Lumpy Paterson 108645.igc
+[circles-clean v2] Tow detected: 0→483. Excluding tow.
+[circles-clean v2] Points after tow trim: 8147
+[circles-clean v2] Cadence ≈ 3.00 s/fix | circles detected: 22
+[circles-clean v2] Wrote CSVs to ./outputs: circles_turns_250910165041.csv, circles_clusters_250910165041.csv, circles_cluster_pairs_250910165041.csv
+Traceback (most recent call last):
+  File "/Users/denisbuckley/PycharmProjects/chatgpt_igc/circles_clean_v2.py", line 315, in <module>
+  File "/Users/denisbuckley/PycharmProjects/chatgpt_igc/circles_clean_v2.py", line 312, in main
+  File "/Users/denisbuckley/PycharmProjects/chatgpt_igc/circles_clean_v2.py", line 272, in plot_map
+  File "/Users/denisbuckley/PycharmProjects/chatgpt_igc/venv/lib/python3.11/site-packages/matplotlib/pyplot.py", line 614, in show
+    return _get_backend_mod().show(*args, **kwargs)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/Users/denisbuckley/PycharmProjects/chatgpt_igc/venv/lib/python3.11/site-packages/matplotlib/backend_bases.py", line 3550, in show
+    cls.mainloop()
+  File "/Users/denisbuckley/PycharmProjects/chatgpt_igc/venv/lib/python3.11/site-packages/matplotlib/backends/backend_macosx.py", line 179, in start_main_loop
+    with _allow_interrupt_macos():
+  File "/Library/Frameworks/Python.framework/Versions/3.11/lib/python3.11/contextlib.py", line 144, in __exit__
+    next(self.gen)
+  File "/Users/denisbuckley/PycharmProjects/chatgpt_igc/venv/lib/python3.11/site-packages/matplotlib/backend_bases.py", line 1660, in _allow_interrupt
+    old_sigint_handler(*handler_args)
+KeyboardInterrupt

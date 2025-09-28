@@ -1,6 +1,0 @@
-[circles-clean v2c] Parsing IGC: 2020-11-08 Lumpy Paterson 108645.igc
-/Users/denisbuckley/PycharmProjects/chatgpt_igc/igc_utils.py:117: FutureWarning: Series.fillna with 'method' is deprecated and will raise in a future version. Use obj.ffill() or obj.bfill() instead.
-  out["heading"] = pd.Series(heads, index=out.index).fillna(method="bfill").fillna(0.0)
-[circles-clean v2c] Tow detected: 0→85. Excluding tow.
-[circles-clean v2c] Points after tow trim: 8545
-[circles-clean v2c] Cadence ≈ 3.00 s/fix | raw circles detected: 222

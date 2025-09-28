@@ -57,7 +57,9 @@ def detect_altitude_clusters(df: pd.DataFrame,
                         "lon": seg.lon.mean(),
                     })
                 start_i = None
-    return pd.DataFrame(clusters)
+    out = pd.DataFrame(clusters).reset_index(drop=True)
+    out["cluster_id"] = out.index  # 0..N-1
+    return out
 
 def outdir_for(igc_path: Path) -> Path:
     base = igc_path.stem
@@ -66,22 +68,38 @@ def outdir_for(igc_path: Path) -> Path:
     return outdir
 
 def main():
+    import argparse
+    from pathlib import Path
+
     ap = argparse.ArgumentParser()
     ap.add_argument("igc", nargs="?", help="Path to IGC file")
     ap.add_argument("--out", help="Output CSV", default=None)
     args = ap.parse_args()
 
-    igc_path = Path(args.igc) if args.igc else Path(input("Enter IGC file path: ").strip())
+    # Defaults
+    default_igc = Path("igc/2020-11-08 Lumpy Paterson 108645.igc")
+    default_out = Path("outputs/altitude_clusters.csv")
+
+    # IGC input
+    if args.igc:
+        igc_path = Path(args.igc)
+    else:
+        user_in = input(f"Enter path to IGC file [default: {default_igc}]: ").strip()
+        igc_path = Path(user_in) if user_in else default_igc
+
     if not igc_path.exists():
         raise FileNotFoundError(igc_path)
 
+    # === altitude clustering logic ===
     df = parse_igc_brecords(igc_path)
     clusters = detect_altitude_clusters(df)
 
-    outdir = outdir_for(igc_path)
-    out_csv = Path(args.out) if args.out else outdir / "altitude_clusters.csv"
-    clusters.to_csv(out_csv, index=False)
-    print(f"[OK] wrote {len(clusters)} clusters → {out_csv}")
+    # Output
+    out_path = Path(args.out) if args.out else default_out
+    out_path.parent.mkdir(parents=True, exist_ok=True)
 
+    clusters.to_csv(out_path, index=False)
+    print(f"[OK] wrote {len(clusters)} clusters → {out_path}")
+    return 0
 if __name__ == "__main__":
     main()

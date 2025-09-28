@@ -74,23 +74,35 @@ def cluster_circles(df, dist_thresh=200.0, time_gap=300.0):
     return pd.DataFrame(enriched)
 
 def main():
-    circles_path = "outputs/circles.csv"
-    if not os.path.exists(circles_path):
-        print(f"Missing input: {circles_path}. Run circles_from_brecords_v1d.py first.")
+    import argparse
+    from pathlib import Path
+    import os
+
+    ap = argparse.ArgumentParser()
+    ap.add_argument("circles", nargs="?", help="Path to circles.csv")
+    ap.add_argument("--out", help="Path to output enriched clusters CSV")
+    args = ap.parse_args()
+
+    # Default file if nothing passed
+    default_circles = Path("outputs/circles.csv")
+    default_out = Path("outputs/circle_clusters_enriched.csv")
+
+    if args.circles:
+        circles_path = Path(args.circles)
+    else:
+        user_in = input(f"Enter path to circles.csv [default: {default_circles}]: ").strip()
+        circles_path = Path(user_in) if user_in else default_circles
+
+    if not circles_path.exists():
+        print(f"[ERROR] Missing input: {circles_path}")
         return
 
-    circles = pd.read_csv(circles_path)
-    if circles.empty:
-        print("No circles found in input.")
-        return
+    out_path = Path(args.out) if args.out else default_out
 
-    clusters_df = cluster_circles(circles)
-    os.makedirs("outputs", exist_ok=True)
-    out_path = "outputs/circle_clusters_enriched.csv"
-    clusters_df.to_csv(out_path, index=False)
-
-    print(f"Wrote {len(clusters_df)} clusters → {out_path}")
-    print(clusters_df.head(10).to_string(index=False))
-
+    # === existing cluster logic ===
+    df = pd.read_csv(circles_path)
+    clusters = cluster_circles(df)   # your existing function
+    clusters.to_csv(out_path, index=False)
+    print(f"[OK] wrote {out_path}")
 if __name__ == "__main__":
     main()

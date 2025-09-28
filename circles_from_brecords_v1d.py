@@ -5,7 +5,8 @@ import os
 import math
 import numpy as np
 import pandas as pd
-
+import sys
+from pathlib import Path
 # ------------------- IGC PARSER -------------------
 def parse_igc_brecords(path):
     times, lats, lons, p_alts, g_alts = [], [], [], [], []
@@ -214,28 +215,37 @@ def detect_circles(df, min_duration_s=6.0, max_duration_s=60.0, min_radius_m=8.0
 
 # ------------------- MAIN -------------------
 def main():
-    default_igc = "2020-11-08 Lumpy Paterson 108645.igc"
-    path = input(f"Enter path to IGC file [default: {default_igc}]: ").strip() or default_igc
+    import argparse
+    from pathlib import Path
 
-    df = parse_igc_brecords(path)
-    circles_df = detect_circles(df,
-                                min_duration_s=6.0,
-                                max_duration_s=60.0,
-                                min_radius_m=8.0,
-                                max_radius_m=600.0,
-                                min_bank_deg=5.0,
-                                vmax_climb_ms=10.0)
+    ap = argparse.ArgumentParser()
+    ap.add_argument("igc", nargs="?", help="Path to IGC file")
+    ap.add_argument("--out", help="Path to output circles.csv")
+    args = ap.parse_args()
 
-    os.makedirs("outputs", exist_ok=True)
-    out_path = "outputs/circles.csv"
-    circles_df.to_csv(out_path, index=False)
+    # Defaults
+    default_igc = Path("igc/2020-11-08 Lumpy Paterson 108645.igc")
+    default_out = Path("outputs/circles.csv")
 
-    print(f"Wrote {len(circles_df)} circles → {out_path}")
-    if not circles_df.empty:
-        n_climb = int((circles_df["alt_gained_m"] > 0).sum())
-        n_sink  = int((circles_df["alt_gained_m"] < 0).sum())
-        print(f"Climb circles: {n_climb} | Sink circles: {n_sink}")
-        print(circles_df.head(10).to_string(index=False))
+    # IGC input
+    if args.igc:
+        igc_path = Path(args.igc)
+    else:
+        user_in = input(f"Enter path to IGC file [default: {default_igc}]: ").strip()
+        igc_path = Path(user_in) if user_in else default_igc
+
+    # Output
+    out_path = Path(args.out) if args.out else default_out
+
+    # Ensure parent folder exists
+    out_path.parent.mkdir(parents=True, exist_ok=True)
+
+    # === existing circle logic ===
+    df = parse_igc_brecords(igc_path)  # your existing function
+    circles = detect_circles(df)       # your existing function
+    circles.to_csv(out_path, index=False)
+
+    print(f"[OK] wrote {out_path}")
 
 if __name__ == "__main__":
     main()

@@ -1,0 +1,67 @@
+===== pipeline_v3 start 2025-09-28T18:05:22.381950 =====
+IGC: igc/2020-11-08 Lumpy Paterson 108645.igc
+RUN_DIR: /Users/denisbuckley/PycharmProjects/chatgpt_igc/outputs/batch_csv/2020-11-08 Lumpy Paterson 108645
+
+[RUN] (cwd=/Users/denisbuckley/PycharmProjects/chatgpt_igc/outputs/batch_csv/2020-11-08 Lumpy Paterson 108645) ['/Users/denisbuckley/PycharmProjects/chatgpt_igc/venv/bin/python', '/Users/denisbuckley/PycharmProjects/chatgpt_igc/circles_from_brecords_v1d.py', '/Users/denisbuckley/PycharmProjects/chatgpt_igc/outputs/batch_csv/2020-11-08 Lumpy Paterson 108645/2020-11-08 Lumpy Paterson 108645.igc', '--out', 'circles.csv']
+[OK] wrote circles.csv
+[RC] 0
+
+[RUN] (cwd=/Users/denisbuckley/PycharmProjects/chatgpt_igc/outputs/batch_csv/2020-11-08 Lumpy Paterson 108645) ['/Users/denisbuckley/PycharmProjects/chatgpt_igc/venv/bin/python', '/Users/denisbuckley/PycharmProjects/chatgpt_igc/circle_clusters_v1s.py', 'circles.csv', '--out', 'circle_clusters_enriched.csv']
+[OK] wrote circle_clusters_enriched.csv
+[RC] 0
+
+[RUN] (cwd=/Users/denisbuckley/PycharmProjects/chatgpt_igc/outputs/batch_csv/2020-11-08 Lumpy Paterson 108645) ['/Users/denisbuckley/PycharmProjects/chatgpt_igc/venv/bin/python', '/Users/denisbuckley/PycharmProjects/chatgpt_igc/altitude_clusters_v1.py', '/Users/denisbuckley/PycharmProjects/chatgpt_igc/outputs/batch_csv/2020-11-08 Lumpy Paterson 108645/2020-11-08 Lumpy Paterson 108645.igc', '--out', 'altitude_clusters.csv']
+[OK] wrote 141 clusters → altitude_clusters.csv
+[RC] 0
+
+[RUN] (cwd=/Users/denisbuckley/PycharmProjects/chatgpt_igc/outputs/batch_csv/2020-11-08 Lumpy Paterson 108645) ['/Users/denisbuckley/PycharmProjects/chatgpt_igc/venv/bin/python', '/Users/denisbuckley/PycharmProjects/chatgpt_igc/match_clusters_v1.py', 'circle_clusters_enriched.csv', 'altitude_clusters.csv', '--out', 'matched_clusters.csv']
+[OK] wrote 114 matches → matched_clusters.csv
+[OK] wrote stats → matched_clusters.json
+[RC] 0
+
+===== pipeline_v3 done 2025-09-28T18:05:28.865431 =====
+===== pipeline_v3 start 2025-09-28T22:17:48.881555 =====
+IGC: igc/2020-11-08 Lumpy Paterson 108645.igc
+RUN_DIR: /Users/denisbuckley/PycharmProjects/chatgpt_igc/outputs/batch_csv/2020-11-08 Lumpy Paterson 108645
+
+[RUN] (cwd=/Users/denisbuckley/PycharmProjects/chatgpt_igc/outputs/batch_csv/2020-11-08 Lumpy Paterson 108645) ['/Users/denisbuckley/PycharmProjects/chatgpt_igc/venv/bin/python', '/Users/denisbuckley/PycharmProjects/chatgpt_igc/circles_from_brecords_v1d.py', '/Users/denisbuckley/PycharmProjects/chatgpt_igc/outputs/batch_csv/2020-11-08 Lumpy Paterson 108645/2020-11-08 Lumpy Paterson 108645.igc', '--out', 'circles.csv']
+[OK] wrote circles.csv
+[RC] 0
+
+[RUN] (cwd=/Users/denisbuckley/PycharmProjects/chatgpt_igc/outputs/batch_csv/2020-11-08 Lumpy Paterson 108645) ['/Users/denisbuckley/PycharmProjects/chatgpt_igc/venv/bin/python', '/Users/denisbuckley/PycharmProjects/chatgpt_igc/circle_clusters_v1s.py', 'circles.csv', '--out', 'circle_clusters_enriched.csv']
+[OK] wrote circle_clusters_enriched.csv
+[RC] 0
+
+[RUN] (cwd=/Users/denisbuckley/PycharmProjects/chatgpt_igc/outputs/batch_csv/2020-11-08 Lumpy Paterson 108645) ['/Users/denisbuckley/PycharmProjects/chatgpt_igc/venv/bin/python', '/Users/denisbuckley/PycharmProjects/chatgpt_igc/altitude_clusters_v1.py', '/Users/denisbuckley/PycharmProjects/chatgpt_igc/outputs/batch_csv/2020-11-08 Lumpy Paterson 108645/2020-11-08 Lumpy Paterson 108645.igc', '--out', 'altitude_clusters.csv']
+[OK] wrote 141 clusters → altitude_clusters.csv
+[RC] 0
+
+[RUN] (cwd=/Users/denisbuckley/PycharmProjects/chatgpt_igc/outputs/batch_csv/2020-11-08 Lumpy Paterson 108645) ['/Users/denisbuckley/PycharmProjects/chatgpt_igc/venv/bin/python', '/Users/denisbuckley/PycharmProjects/chatgpt_igc/match_clusters_v1.py', 'circle_clusters_enriched.csv', 'altitude_clusters.csv', '--out', 'matched_clusters.csv']
+  File "/Users/denisbuckley/PycharmProjects/chatgpt_igc/match_clusters_v1.py", line 159
+    git rev-parse --abbrev-ref HEAD
+        ^^^
+SyntaxError: invalid syntax
+[RC] 1
+
+===== pipeline_v3 start 2025-09-28T22:25:57.209256 =====
+IGC: igc/2020-11-08 Lumpy Paterson 108645.igc
+RUN_DIR: /Users/denisbuckley/PycharmProjects/chatgpt_igc/outputs/batch_csv/2020-11-08 Lumpy Paterson 108645
+
+[RUN] (cwd=/Users/denisbuckley/PycharmProjects/chatgpt_igc/outputs/batch_csv/2020-11-08 Lumpy Paterson 108645) ['/Users/denisbuckley/PycharmProjects/chatgpt_igc/venv/bin/python', '/Users/denisbuckley/PycharmProjects/chatgpt_igc/circles_from_brecords_v1d.py', '/Users/denisbuckley/PycharmProjects/chatgpt_igc/outputs/batch_csv/2020-11-08 Lumpy Paterson 108645/2020-11-08 Lumpy Paterson 108645.igc', '--out', 'circles.csv']
+[OK] wrote circles.csv
+[RC] 0
+
+[RUN] (cwd=/Users/denisbuckley/PycharmProjects/chatgpt_igc/outputs/batch_csv/2020-11-08 Lumpy Paterson 108645) ['/Users/denisbuckley/PycharmProjects/chatgpt_igc/venv/bin/python', '/Users/denisbuckley/PycharmProjects/chatgpt_igc/circle_clusters_v1s.py', 'circles.csv', '--out', 'circle_clusters_enriched.csv']
+[OK] wrote circle_clusters_enriched.csv
+[RC] 0
+
+[RUN] (cwd=/Users/denisbuckley/PycharmProjects/chatgpt_igc/outputs/batch_csv/2020-11-08 Lumpy Paterson 108645) ['/Users/denisbuckley/PycharmProjects/chatgpt_igc/venv/bin/python', '/Users/denisbuckley/PycharmProjects/chatgpt_igc/altitude_clusters_v1.py', '/Users/denisbuckley/PycharmProjects/chatgpt_igc/outputs/batch_csv/2020-11-08 Lumpy Paterson 108645/2020-11-08 Lumpy Paterson 108645.igc', '--out', 'altitude_clusters.csv']
+[OK] wrote 141 clusters → altitude_clusters.csv
+[RC] 0
+
+[RUN] (cwd=/Users/denisbuckley/PycharmProjects/chatgpt_igc/outputs/batch_csv/2020-11-08 Lumpy Paterson 108645) ['/Users/denisbuckley/PycharmProjects/chatgpt_igc/venv/bin/python', '/Users/denisbuckley/PycharmProjects/chatgpt_igc/match_clusters_v1.py', 'circle_clusters_enriched.csv', 'altitude_clusters.csv', '--out', 'matched_clusters.csv']
+[OK] wrote 114 matches → matched_clusters.csv
+[OK] wrote stats → matched_clusters.json
+[RC] 0
+
+===== pipeline_v3 done 2025-09-28T22:26:00.996306 =====

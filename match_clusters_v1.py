@@ -59,10 +59,9 @@ def main():
     default_alts = Path("outputs/altitude_clusters.csv")
     default_out = Path("outputs/matched_clusters.csv")
 
-    circles_path = Path(args.circles) if args.circles else default_circles
-    alts_path = Path(args.alts) if args.alts else default_alts
-    out_path = Path(args.out) if args.out else default_out
-
+    circles_path = Path(args.circles) if args.circles else Path("outputs/circle_clusters_enriched.csv")
+    alts_path = Path(args.alts) if args.alts else Path("outputs/altitude_clusters.csv")
+    out_path = Path(args.out) if args.out else Path("outputs/matched_clusters.csv")
     if not circles_path.exists() or not alts_path.exists():
         print("[ERROR] Missing required inputs. Ensure both circle and altitude cluster CSVs exist in outputs/.")
         return 1
@@ -156,3 +155,4 @@ def main():
 
 if __name__ == "__main__":
     main()
+

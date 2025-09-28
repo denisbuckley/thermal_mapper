@@ -1,0 +1,1041 @@
+{\rtf1\ansi\ansicpg1252\cocoartf2822
+\cocoatextscaling0\cocoaplatform0{\fonttbl\f0\fnil\fcharset0 .SFNS-Regular;\f1\fnil\fcharset0 HelveticaNeue-Bold;\f2\fswiss\fcharset0 Helvetica;
+\f3\fnil\fcharset0 .SFNS-Semibold;\f4\fnil\fcharset0 .AppleSystemUIFontMonospaced-Regular;\f5\froman\fcharset0 TimesNewRomanPSMT;
+\f6\fnil\fcharset0 .SFNS-RegularItalic;\f7\fnil\fcharset0 .SFNS-BoldItalic;\f8\fnil\fcharset0 .SFNS-Bold;
+}
+{\colortbl;\red255\green255\blue255;\red14\green14\blue14;}
+{\*\expandedcolortbl;;\cssrgb\c6700\c6700\c6700;}
+\paperw11900\paperh16840\margl1440\margr1440\vieww11520\viewh15160\viewkind0
+\pard\tx560\tx1120\tx1680\tx2240\tx2800\tx3360\tx3920\tx4480\tx5040\tx5600\tx6160\tx6720\sl324\slmult1\pardirnatural\partightenfactor0
+
+\f0\fs28 \cf2 Got it \uc0\u55357 \u56397  \'97 here\'92s a straight enumeration of the 
+\f1\b \cf2 scripts we actually built together in this project line
+\f0\b0 \cf2 , in the order they emerged and evolved. I\'92m not adding new names or fluff \'97 just the ones we iterated on in our sessions that became the foundation for the batch-match code.\
+\pard\tx560\tx1120\tx1680\tx2240\tx2800\tx3360\tx3920\tx4480\tx5040\tx5600\tx6160\tx6720\pardirnatural\partightenfactor0
+
+\f2\fs24 \cf0 \
+\uc0\u11835 \
+\pard\tx560\tx1120\tx1680\tx2240\tx2800\tx3360\tx3920\tx4480\tx5040\tx5600\tx6160\tx6720\sl324\slmult1\pardirnatural\partightenfactor0
+
+\f0\fs28 \cf2 \
+\pard\tx560\tx1120\tx1680\tx2240\tx2800\tx3360\tx3920\tx4480\tx5040\tx5600\tx6160\tx6720\sl324\slmult1\pardirnatural\partightenfactor0
+
+\f3\b\fs34 \cf2 \uc0\u55357 \u56514  Core utilities
+\f0\b0\fs28 \cf2 \
+\pard\tqr\tx100\tx260\li260\fi-260\sl324\slmult1\sb240\partightenfactor0
+\cf2 	\'95	
+\f1\b \cf2 igc_utils.py
+\f0\b0 \cf2  \uc0\u8594  parser + derived kinematics (
+\f4 alt
+\f0 , 
+\f4 climb_rate
+\f0 , 
+\f4 heading
+\f0 ).\
+\pard\tx560\tx1120\tx1680\tx2240\tx2800\tx3360\tx3920\tx4480\tx5040\tx5600\tx6160\tx6720\pardirnatural\partightenfactor0
+
+\f2\fs24 \cf0 \
+\uc0\u11835 \
+\pard\tx560\tx1120\tx1680\tx2240\tx2800\tx3360\tx3920\tx4480\tx5040\tx5600\tx6160\tx6720\sl324\slmult1\pardirnatural\partightenfactor0
+
+\f0\fs28 \cf2 \
+\pard\tx560\tx1120\tx1680\tx2240\tx2800\tx3360\tx3920\tx4480\tx5040\tx5600\tx6160\tx6720\sl324\slmult1\pardirnatural\partightenfactor0
+
+\f3\b\fs34 \cf2 \uc0\u55357 \u56514  Single-file analysis (altitude-based)
+\f0\b0\fs28 \cf2 \
+\pard\tqr\tx100\tx260\li260\fi-260\sl324\slmult1\sb240\partightenfactor0
+\cf2 	\'95	
+\f1\b \cf2 igc_single.py
+\f0\b0 \cf2  \uc0\u8594  reads one 
+\f4 .igc
+\f0 , altitude vs. time, detects sustained climbs.\
+	\'95	Sometimes also referred to as 
+\f1\b \cf2 igc_analysis_x.py
+\f0\b0 \cf2  in drafts.\
+\pard\tx560\tx1120\tx1680\tx2240\tx2800\tx3360\tx3920\tx4480\tx5040\tx5600\tx6160\tx6720\pardirnatural\partightenfactor0
+
+\f2\fs24 \cf0 \
+\uc0\u11835 \
+\pard\tx560\tx1120\tx1680\tx2240\tx2800\tx3360\tx3920\tx4480\tx5040\tx5600\tx6160\tx6720\sl324\slmult1\pardirnatural\partightenfactor0
+
+\f0\fs28 \cf2 \
+\pard\tx560\tx1120\tx1680\tx2240\tx2800\tx3360\tx3920\tx4480\tx5040\tx5600\tx6160\tx6720\sl324\slmult1\pardirnatural\partightenfactor0
+
+\f3\b\fs34 \cf2 \uc0\u55357 \u56514  Circle detection & clustering
+\f0\b0\fs28 \cf2 \
+\pard\tqr\tx100\tx260\li260\fi-260\sl324\slmult1\sb240\partightenfactor0
+\cf2 	\'95	
+\f1\b \cf2 match_clusters_strict_v1c.py
+\f0\b0 \cf2  \uc0\u8594  detects all circles, groups into clusters.\
+	\'95	
+\f1\b \cf2 match_clusters_strict_v1c_patched.py
+\f0\b0 \cf2  \uc0\u8594  fixed version (NaN/gating clean-up).\
+\pard\tx560\tx1120\tx1680\tx2240\tx2800\tx3360\tx3920\tx4480\tx5040\tx5600\tx6160\tx6720\pardirnatural\partightenfactor0
+
+\f2\fs24 \cf0 \
+\uc0\u11835 \
+\pard\tx560\tx1120\tx1680\tx2240\tx2800\tx3360\tx3920\tx4480\tx5040\tx5600\tx6160\tx6720\sl324\slmult1\pardirnatural\partightenfactor0
+
+\f0\fs28 \cf2 \
+\pard\tx560\tx1120\tx1680\tx2240\tx2800\tx3360\tx3920\tx4480\tx5040\tx5600\tx6160\tx6720\sl324\slmult1\pardirnatural\partightenfactor0
+
+\f3\b\fs34 \cf2 \uc0\u55357 \u56514  Overlay (altitude + circles + clusters)
+\f0\b0\fs28 \cf2 \
+\pard\tqr\tx100\tx260\li260\fi-260\sl324\slmult1\sb240\partightenfactor0
+\cf2 	\'95	
+\f1\b \cf2 overlay_circles_altitude_v1k.py
+\f0\b0 \cf2  \uc0\u8594  first merged overlay version, but broken by half-open try block.\
+	\'95	
+\f1\b \cf2 overlay_circles_altitude_v2.py
+\f0\b0 \cf2  \uc0\u8594  attempted fix, still broken.\
+	\'95	
+\f1\b \cf2 overlay_circles_altitude_v2a.py
+\f0\b0 \cf2  \uc0\u8594  partial patch, unstable.\
+	\'95	
+\f1\b \cf2 overlay_circles_altitude_v2b.py
+\f0\b0 \cf2  \uc0\u8594  removed 
+\f4 tuning_loader
+\f0 , left unmatched braces.\
+	\'95	
+\f1\b \cf2 overlay_circles_altitude_v2c.py
+\f0\b0 \cf2  \uc0\u8594  syntax cleanup attempt, still unstable.\
+	\'95	
+\f1\b \cf2 overlay_circles_altitude_v2d.py
+\f0\b0 \cf2  \uc0\u8594  rebuilt import block cleanly, runs but expected 
+\f4 gps_alt
+\f0 .\
+	\'95	
+\f1\b \cf2 overlay_circles_altitude_v2e.py
+\f0\b0 \cf2  \uc0\u8594  current stable: uses 
+\f4 "alt"
+\f0  with fallback, adds debug logging.\
+\pard\tx560\tx1120\tx1680\tx2240\tx2800\tx3360\tx3920\tx4480\tx5040\tx5600\tx6160\tx6720\pardirnatural\partightenfactor0
+
+\f2\fs24 \cf0 \
+\uc0\u11835 \
+\pard\tx560\tx1120\tx1680\tx2240\tx2800\tx3360\tx3920\tx4480\tx5040\tx5600\tx6160\tx6720\sl324\slmult1\pardirnatural\partightenfactor0
+
+\f0\fs28 \cf2 \
+\pard\tx560\tx1120\tx1680\tx2240\tx2800\tx3360\tx3920\tx4480\tx5040\tx5600\tx6160\tx6720\sl324\slmult1\pardirnatural\partightenfactor0
+
+\f3\b\fs34 \cf2 \uc0\u55357 \u56514  Batch layer (built on above)
+\f0\b0\fs28 \cf2 \
+\pard\tqr\tx100\tx260\li260\fi-260\sl324\slmult1\sb240\partightenfactor0
+\cf2 	\'95	
+\f1\b \cf2 batch_match_igc_v3e.py
+\f0\b0 \cf2  (and siblings) \uc0\u8594  batch-processing series running altitude + circle detection over hundreds of IGCs, aggregating into DataFrames.\
+\pard\tx560\tx1120\tx1680\tx2240\tx2800\tx3360\tx3920\tx4480\tx5040\tx5600\tx6160\tx6720\pardirnatural\partightenfactor0
+
+\f2\fs24 \cf0 \
+\uc0\u11835 \
+\pard\tx560\tx1120\tx1680\tx2240\tx2800\tx3360\tx3920\tx4480\tx5040\tx5600\tx6160\tx6720\sl324\slmult1\pardirnatural\partightenfactor0
+
+\f0\fs28 \cf2 \
+\uc0\u9989  Those are the 
+\f1\b \cf2 exact filenames/versions
+\f0\b0 \cf2  we\'92ve iterated on here that form the backbone:\
+\pard\tqr\tx260\tx420\li420\fi-420\sl324\slmult1\sb240\partightenfactor0
+
+\f5 \cf2 	1.	
+\f4 igc_utils.py
+\f0 \
+
+\f5 	2.	
+\f4 igc_single.py
+\f0 \
+
+\f5 	3.	
+\f4 match_clusters_strict_v1c.py
+\f0  / 
+\f4 match_clusters_strict_v1c_patched.py
+\f0 \
+
+\f5 	4.	
+\f4 overlay_circles_altitude_v1k.py
+\f0  \uc0\u8594  \'85 \u8594  
+\f4 overlay_circles_altitude_v2e.py
+\f0 \
+
+\f5 	5.	
+\f4 batch_match_igc_v3e.py
+\f0 \
+\pard\tx560\tx1120\tx1680\tx2240\tx2800\tx3360\tx3920\tx4480\tx5040\tx5600\tx6160\tx6720\pardirnatural\partightenfactor0
+
+\f2\fs24 \cf0 \
+\uc0\u11835 \
+\pard\tx560\tx1120\tx1680\tx2240\tx2800\tx3360\tx3920\tx4480\tx5040\tx5600\tx6160\tx6720\sl324\slmult1\pardirnatural\partightenfactor0
+
+\f0\fs28 \cf2 \
+igc_utils.py\
+\uc0\u9474    \u9492 \u9472  Core parser (time, lat, lon, alt) + derived metrics (dt, dh, climb_rate, heading)\
+\uc0\u9474 \
+\uc0\u9500 \u9472 \u9472  igc_single.py\
+\uc0\u9474      \u9492 \u9472  Uses igc_utils\
+\uc0\u9474      \u9492 \u9472  Altitude vs time, detects sustained climbs\
+\uc0\u9474 \
+\uc0\u9500 \u9472 \u9472  match_clusters_strict_v1c.py\
+\uc0\u9474      \u9492 \u9472  Uses igc_utils\
+\uc0\u9474      \u9492 \u9472  Detects ALL circles from track, groups into clusters\
+\uc0\u9474         \u9492 \u9472  Patched as match_clusters_strict_v1c_patched.py\
+\uc0\u9474 \
+\uc0\u9492 \u9472 \u9472  overlay_circles_altitude_v1k.py\
+      \uc0\u9492 \u9472  Combines altitude detection (igc_single) + circle clustering (match_clusters_strict)\
+      \uc0\u9492 \u9472  Iterated through:\
+          \uc0\u9500 \u9472  overlay_circles_altitude_v2.py   (broken import block)\
+          \uc0\u9500 \u9472  overlay_circles_altitude_v2a.py  (partial patch)\
+          \uc0\u9500 \u9472  overlay_circles_altitude_v2b.py  (removed tuning_loader, unmatched braces)\
+          \uc0\u9500 \u9472  overlay_circles_altitude_v2c.py  (syntax cleanup attempt)\
+          \uc0\u9500 \u9472  overlay_circles_altitude_v2d.py  (clean import, still gps_alt mismatch)\
+          \uc0\u9492 \u9472  overlay_circles_altitude_v2e.py  \u9989  stable \'97 uses alt fallback, debug logging\
+              \
+batch_match_igc_v3e.py\
+   \uc0\u9492 \u9472  Built on overlay (altitude + circles + clusters) + igc_utils\
+   \uc0\u9492 \u9472  Scales to batch-processing 100\'96200 IGC files, aggregates results into DataFrames\
+\
+\
+\
+\pard\tqr\tx100\tx260\li260\fi-260\sl324\slmult1\sb240\partightenfactor0
+\cf2 	\'95	
+\f1\b \cf2 overlay_circles_altitude_v2e.py
+\f0\b0 \cf2 : produces a 
+\f1\b \cf2 bird\'92s-eye plot of the track
+\f0\b0 \cf2  with overlays for\
+\pard\tqr\tx660\tx820\li820\fi-560\sl324\slmult1\sb240\partightenfactor0
+
+\f5 \cf2 	1.	
+\f1\b circle clusters / #circles (via segments)
+\f0\b0  and\
+
+\f5 	2.	
+\f1\b altitude-based climb segments
+\f0\b0 .\
+It also writes a persistent 
+\f1\b overlay_debug.log
+\f0\b0 .\
+\pard\tqr\tx100\tx260\li260\fi-260\sl324\slmult1\sb240\partightenfactor0
+\cf2 	\'95	
+\f1\b \cf2 match_clusters_strict_v1c.py
+\f0\b0 \cf2 : circles-only pipeline where 
+\f1\b \cf2 clusters are the core output
+\f0\b0 \cf2  (the overlay family later merged that with altitude).\
+\
+And per your follow-up: I\'92ve created a 
+\f1\b \cf2 clusters-only
+\f0\b0 \cf2  script so you can run just the clustering without any plotting.\
+\
+\uc0\u55357 \u56516  
+\f1\b \cf2 circle_clusters_v1.py
+\f0\b0 \cf2  \'97 circles only \uc0\u8594  clusters (CSV), with debug log\
+\pard\tx560\tx1120\tx1680\tx2240\tx2800\tx3360\tx3920\tx4480\tx5040\tx5600\tx6160\tx6720\sl324\slmult1\pardirnatural\partightenfactor0
+{\field{\*\fldinst{HYPERLINK "sandbox:/mnt/data/circle_clusters_v1.py?_chatgptios_conversationID=68ca82e6-c7f8-8321-8a64-e76a7696a8dd&_chatgptios_messageID=51ca0615-ae55-473a-b146-7092d8c47609"}}{\fldrslt \cf2 Download}}\cf2 \
+\
+\pard\tx560\tx1120\tx1680\tx2240\tx2800\tx3360\tx3920\tx4480\tx5040\tx5600\tx6160\tx6720\sl324\slmult1\pardirnatural\partightenfactor0
+
+\f3\b\fs30 \cf2 What it does (brief)
+\f0\b0\fs28 \
+\pard\tqr\tx100\tx260\li260\fi-260\sl324\slmult1\sb240\partightenfactor0
+\cf2 	\'95	Reads the IGC (uses 
+\f4 igc_utils
+\f0  if present; otherwise minimal parser).\
+	\'95	Detects 
+\f1\b \cf2 circling segments
+\f0\b0 \cf2  (turn-rate, radius, arc-span), computes 
+\f1\b \cf2 n_turns
+\f0\b0 \cf2  per segment.\
+	\'95	
+\f1\b \cf2 Clusters
+\f0\b0 \cf2  those segments spatiotemporally (CL_EPS_M, CL_GAP_S).\
+	\'95	Outputs:\
+\pard\tqr\tx500\tx660\li660\fi-400\sl324\slmult1\sb240\partightenfactor0
+\cf2 	\'95	
+\f4 circle_clusters.csv
+\f0  (one row per cluster: centroid lat/lon, 
+\f4 n_segments
+\f0 , 
+\f4 \uc0\u931  n_turns
+\f0 , 
+\f4 \uc0\u931  dur_s
+\f0 , start/end).\
+	\'95	
+\f4 circle_segments.csv
+\f0  (detail, one row per circling segment).\
+\pard\tqr\tx100\tx260\li260\fi-260\sl324\slmult1\sb240\partightenfactor0
+\cf2 	\'95	Writes a persistent 
+\f1\b \cf2 circle_clusters_debug.log
+\f0\b0 \cf2  with counts and diagnostics.\
+\
+git add circle_clusters_v1m.py\
+git commit -m "fix(paths): CSVs to /outputs, debug to /debugs; add console summary (circle_clusters_v1m.py)"\
+\
+\
+######\
+\
+\
+\pard\tx560\tx1120\tx1680\tx2240\tx2800\tx3360\tx3920\tx4480\tx5040\tx5600\tx6160\tx6720\sl324\slmult1\pardirnatural\partightenfactor0
+
+\f3\b\fs30 \cf2 1. Base utilities
+\f0\b0\fs28 \
+\pard\tqr\tx100\tx260\li260\fi-260\sl324\slmult1\sb240\partightenfactor0
+\cf2 	\'95	
+\f1\b \cf2 igc_utils.py
+\f0\b0 \cf2 \
+\pard\tqr\tx500\tx660\li660\fi-400\sl324\slmult1\sb240\partightenfactor0
+\cf2 	\'95	Parse IGC \uc0\u8594  fixes with 
+\f4 time_s, lat, lon, alt
+\f0 .\
+	\'95	Geodesy helpers: haversine, XY transforms, polygon orientation.\
+	\'95	Foundation for everything else.\
+\pard\tx560\tx1120\tx1680\tx2240\tx2800\tx3360\tx3920\tx4480\tx5040\tx5600\tx6160\tx6720\pardirnatural\partightenfactor0
+
+\f2\fs24 \cf0 \
+\uc0\u11835 \
+\pard\tx560\tx1120\tx1680\tx2240\tx2800\tx3360\tx3920\tx4480\tx5040\tx5600\tx6160\tx6720\sl324\slmult1\pardirnatural\partightenfactor0
+
+\f0\fs28 \cf2 \
+
+\f3\b\fs30 2. Circle-based thermal detection
+\f0\b0\fs28 \
+\pard\tqr\tx100\tx260\li260\fi-260\sl324\slmult1\sb240\partightenfactor0
+\cf2 	\'95	
+\f1\b \cf2 overlay_circles_altitude_v1k.py \'85 v2*
+\f0\b0 \cf2 \
+\pard\tqr\tx500\tx660\li660\fi-400\sl324\slmult1\sb240\partightenfactor0
+\cf2 	\'95	Detect turning segments (circles).\
+	\'95	Overlay on track plots: side view (altitude) + bird\'92s-eye.\
+	\'95	Debug logs + CSV.\
+	\'95	Became the \'93visual ground truth\'94 of circle detection.\
+\pard\tqr\tx100\tx260\li260\fi-260\sl324\slmult1\sb240\partightenfactor0
+\cf2 	\'95	
+\f1\b \cf2 circle_clusters_v1.py \'85 v1r.py
+\f0\b0 \cf2 \
+\pard\tqr\tx500\tx660\li660\fi-400\sl324\slmult1\sb240\partightenfactor0
+\cf2 	\'95	Group circling segments into clusters = thermals.\
+	\'95	Progressive improvements: CSV outputs, debug logs, edge-wise outside labels, cluster summaries, added 
+\f1\b alt_gained_m
+\f0\b0  and 
+\f1\b av_climb_ms
+\f0\b0 .\
+	\'95	Now: complete single-flight cluster analysis pipeline.\
+\pard\tx560\tx1120\tx1680\tx2240\tx2800\tx3360\tx3920\tx4480\tx5040\tx5600\tx6160\tx6720\pardirnatural\partightenfactor0
+
+\f2\fs24 \cf0 \
+\uc0\u11835 \
+\pard\tx560\tx1120\tx1680\tx2240\tx2800\tx3360\tx3920\tx4480\tx5040\tx5600\tx6160\tx6720\sl324\slmult1\pardirnatural\partightenfactor0
+
+\f0\fs28 \cf2 \
+
+\f3\b\fs30 3. Altitude-based thermal detection
+\f0\b0\fs28 \
+\pard\tqr\tx100\tx260\li260\fi-260\sl324\slmult1\sb240\partightenfactor0
+\cf2 	\'95	
+\f1\b \cf2 overlay_altitude_clusters_*
+\f0\b0 \cf2  (from your earlier chain, parallel to the circle detectors)\
+\pard\tqr\tx500\tx660\li660\fi-400\sl324\slmult1\sb240\partightenfactor0
+\cf2 	\'95	Detect sustained climb phases from 
+\f1\b altitude/time traces
+\f0\b0 , independent of turning.\
+	\'95	Idea: pick up thermals even when circling detection fails (wide turns, straight climbs, less distinct circles).\
+	\'95	Output: altitude-defined \'93thermal segments\'94, also clusterable.\
+	\'95	These can be cross-checked against circle clusters.\
+\pard\tx560\tx1120\tx1680\tx2240\tx2800\tx3360\tx3920\tx4480\tx5040\tx5600\tx6160\tx6720\pardirnatural\partightenfactor0
+
+\f2\fs24 \cf0 \
+\uc0\u11835 \
+\pard\tx560\tx1120\tx1680\tx2240\tx2800\tx3360\tx3920\tx4480\tx5040\tx5600\tx6160\tx6720\sl324\slmult1\pardirnatural\partightenfactor0
+
+\f0\fs28 \cf2 \
+
+\f3\b\fs30 4. Cluster matching
+\f0\b0\fs28 \
+\pard\tqr\tx100\tx260\li260\fi-260\sl324\slmult1\sb240\partightenfactor0
+\cf2 	\'95	
+\f1\b \cf2 match_clusters_strict_v1c.py
+\f0\b0 \cf2 \
+\pard\tqr\tx500\tx660\li660\fi-400\sl324\slmult1\sb240\partightenfactor0
+\cf2 	\'95	Compares clusters (from circle or altitude detection) between two flights.\
+	\'95	Matches by spatiotemporal overlap.\
+	\'95	Used to see when multiple pilots shared the same thermal.\
+\pard\tx560\tx1120\tx1680\tx2240\tx2800\tx3360\tx3920\tx4480\tx5040\tx5600\tx6160\tx6720\pardirnatural\partightenfactor0
+
+\f2\fs24 \cf0 \
+\uc0\u11835 \
+\pard\tx560\tx1120\tx1680\tx2240\tx2800\tx3360\tx3920\tx4480\tx5040\tx5600\tx6160\tx6720\sl324\slmult1\pardirnatural\partightenfactor0
+
+\f0\fs28 \cf2 \
+
+\f3\b\fs30 5. Batch pipelines
+\f0\b0\fs28 \
+\pard\tqr\tx100\tx260\li260\fi-260\sl324\slmult1\sb240\partightenfactor0
+\cf2 	\'95	
+\f1\b \cf2 batch_match_igc_v3*
+\f0\b0 \cf2 \
+\pard\tqr\tx500\tx660\li660\fi-400\sl324\slmult1\sb240\partightenfactor0
+\cf2 	\'95	Wraps single-flight detection (circle + altitude).\
+	\'95	Runs across many IGCs.\
+	\'95	Consolidates results into DataFrames for analysis at scale.\
+\pard\tx560\tx1120\tx1680\tx2240\tx2800\tx3360\tx3920\tx4480\tx5040\tx5600\tx6160\tx6720\pardirnatural\partightenfactor0
+
+\f2\fs24 \cf0 \
+\uc0\u11835 \
+\pard\tx560\tx1120\tx1680\tx2240\tx2800\tx3360\tx3920\tx4480\tx5040\tx5600\tx6160\tx6720\sl324\slmult1\pardirnatural\partightenfactor0
+
+\f0\fs28 \cf2 \
+\uc0\u9989  So right now we have 
+\f1\b \cf2 two independent thermal detection methods
+\f0\b0 \cf2 :\
+\pard\tqr\tx260\tx420\li420\fi-420\sl324\slmult1\sb240\partightenfactor0
+
+\f5 \cf2 	1.	
+\f1\b Circle-based
+\f0\b0  (v1r script chain)\
+
+\f5 	2.	
+\f1\b Altitude-based
+\f0\b0  (sustained climbs)\
+\
+\
+\pard\tx560\tx1120\tx1680\tx2240\tx2800\tx3360\tx3920\tx4480\tx5040\tx5600\tx6160\tx6720\sl324\slmult1\pardirnatural\partightenfactor0
+\cf2  here\'92s what the 
+\f1\b \cf2 current outputs
+\f0\b0 \cf2  look like from each detector:\
+\pard\tx560\tx1120\tx1680\tx2240\tx2800\tx3360\tx3920\tx4480\tx5040\tx5600\tx6160\tx6720\pardirnatural\partightenfactor0
+
+\f2\fs24 \cf0 \
+\uc0\u11835 \
+\pard\tx560\tx1120\tx1680\tx2240\tx2800\tx3360\tx3920\tx4480\tx5040\tx5600\tx6160\tx6720\sl324\slmult1\pardirnatural\partightenfactor0
+
+\f0\fs28 \cf2 \
+
+\f3\b\fs30 1. Circle-based script (circle_clusters_v1r.py)
+\f0\b0\fs28 \
+\
+It writes 
+\f1\b \cf2 two CSVs
+\f0\b0 \cf2  into 
+\f4 \cf2 /outputs/
+\f0 \cf2 :\
+\
+\pard\tx560\tx1120\tx1680\tx2240\tx2800\tx3360\tx3920\tx4480\tx5040\tx5600\tx6160\tx6720\sl324\slmult1\pardirnatural\partightenfactor0
+
+\f1\b \cf2 a. circle_segments.csv
+\f0\b0 \cf2 \
+\pard\tqr\tx100\tx260\li260\fi-260\sl324\slmult1\sb240\partightenfactor0
+\cf2 	\'95	One row per 
+\f1\b \cf2 segment
+\f0\b0 \cf2  (a continuous circling bout).\
+	\'95	Columns (typical):i_start, i_end, t_start, t_end, dur_s, arc_deg, n_turns, lat, lon\
+\pard\tx560\tx1120\tx1680\tx2240\tx2800\tx3360\tx3920\tx4480\tx5040\tx5600\tx6160\tx6720\sl324\slmult1\pardirnatural\partightenfactor0
+
+\f1\b \cf2 b. circle_clusters_enriched.csv
+\f0\b0 \cf2 \
+\pard\tqr\tx100\tx260\li260\fi-260\sl324\slmult1\sb240\partightenfactor0
+\cf2 	\'95	One row per 
+\f1\b \cf2 cluster
+\f0\b0 \cf2  (merged thermals).\
+	\'95	Columns:cluster_id, n_segments, n_turns_sum, dur_s_sum,\
+lat, lon, alt_gained_m, av_climb_ms\
+	\'95	Console summary is derived from this file.\
+\pard\tx560\tx1120\tx1680\tx2240\tx2800\tx3360\tx3920\tx4480\tx5040\tx5600\tx6160\tx6720\sl324\slmult1\pardirnatural\partightenfactor0
+
+\f3\b\fs30 \cf2 2. Altitude-based script (overlay_altitude_clusters_*)
+\f0\b0\fs28 \
+\
+That family was built to detect thermals from 
+\f1\b \cf2 sustained climb in altitude/time traces
+\f0\b0 \cf2 .\
+\pard\tqr\tx100\tx260\li260\fi-260\sl324\slmult1\sb240\partightenfactor0
+\cf2 	\'95	It outputs a 
+\f1\b \cf2 clusters CSV
+\f0\b0 \cf2  (name like 
+\f4 altitude_clusters.csv
+\f0 ).\
+	\'95	Each row = a detected climb segment / cluster.\
+	\'95	Columns (typical):cluster_id, t_start, t_end, dur_s, lat, lon,\
+alt_start, alt_end, alt_gained_m, av_climb_ms\
+\pard\tx560\tx1120\tx1680\tx2240\tx2800\tx3360\tx3920\tx4480\tx5040\tx5600\tx6160\tx6720\fi260\sl324\slmult1\pardirnatural\partightenfactor0
+\cf2 (Since altitude is the driver, those fields are explicit here.)\
+\pard\tx560\tx1120\tx1680\tx2240\tx2800\tx3360\tx3920\tx4480\tx5040\tx5600\tx6160\tx6720\pardirnatural\partightenfactor0
+
+\f2\fs24 \cf0 \
+\uc0\u11835 \
+\pard\tx560\tx1120\tx1680\tx2240\tx2800\tx3360\tx3920\tx4480\tx5040\tx5600\tx6160\tx6720\sl324\slmult1\pardirnatural\partightenfactor0
+
+\f0\fs28 \cf2 \
+
+\f3\b\fs30 \uc0\u55358 \u56809  Key difference
+\f0\b0\fs28 \
+\pard\tqr\tx100\tx260\li260\fi-260\sl324\slmult1\sb240\partightenfactor0
+\cf2 	\'95	
+\f1\b \cf2 Circle script
+\f0\b0 \cf2  focuses on geometry of turning; altitude metrics are 
+\f6\i \cf2 derived afterward
+\f0\i0 \cf2 .\
+	\'95	
+\f1\b \cf2 Altitude script
+\f0\b0 \cf2  focuses on vertical performance directly; turning isn\'92t guaranteed.\
+\
+Both end up giving you CSVs of candidate \'93thermals,\'94 but with 
+\f1\b \cf2 slightly different schemas
+\f0\b0 \cf2 .\
+\
+\pard\tx560\tx1120\tx1680\tx2240\tx2800\tx3360\tx3920\tx4480\tx5040\tx5600\tx6160\tx6720\sl324\slmult1\pardirnatural\partightenfactor0
+
+\f3\b\fs30 \cf2 What we\'92re building toward
+\f0\b0\fs28 \
+\pard\tqr\tx260\tx420\li420\fi-420\sl324\slmult1\sb240\partightenfactor0
+
+\f5 \cf2 	1.	
+\f1\b \cf2 Detect thermals two ways on each flight
+\f0\b0 \cf2 \
+\pard\tqr\tx500\tx660\li660\fi-660\sl324\slmult1\sb240\partightenfactor0
+\cf2 	\'95	Circling (pilot behaviour).\
+	\'95	Altitude climbs (airmass behaviour).\
+\pard\tqr\tx260\tx420\li420\fi-420\sl324\slmult1\sb240\partightenfactor0
+
+\f5 \cf2 	2.	
+\f1\b \cf2 Cross-validate detections
+\f0\b0 \cf2 \
+\pard\tqr\tx500\tx660\li660\fi-660\sl324\slmult1\sb240\partightenfactor0
+\cf2 	\'95	Keep clusters that both methods agree on.\
+	\'95	Drop clusters that only one method sees (less confident).\
+\pard\tqr\tx260\tx420\li420\fi-420\sl324\slmult1\sb240\partightenfactor0
+
+\f5 \cf2 	3.	
+\f1\b \cf2 Filter
+\f0\b0 \cf2 \
+\pard\tqr\tx500\tx660\li660\fi-660\sl324\slmult1\sb240\partightenfactor0
+\cf2 	\'95	By 
+\f1\b strength
+\f0\b0  (e.g. 
+\f4 av_climb_ms \uc0\u8805  1.0 m/s
+\f0 , 
+\f4 alt_gained_m \uc0\u8805  80 m
+\f0 ).\
+	\'95	By 
+\f1\b dimensions
+\f0\b0  (circle radius range, cluster spread, duration).\
+	\'95	This trims noise and weak/false thermals.\
+\pard\tqr\tx260\tx420\li420\fi-420\sl324\slmult1\sb240\partightenfactor0
+
+\f5 \cf2 	4.	
+\f1\b \cf2 Batch run
+\f0\b0 \cf2 \
+\pard\tqr\tx500\tx660\li660\fi-660\sl324\slmult1\sb240\partightenfactor0
+\cf2 	\'95	Across many IGCs in the same region/day.\
+	\'95	Aggregate the confident thermals from all flights.\
+	\'95	Produce a thermal 
+\f1\b map
+\f0\b0  \'97 showing 
+\f6\i \cf2 where and how strong
+\f0\i0 \cf2  the reliable thermals are.\
+\pard\tx560\tx1120\tx1680\tx2240\tx2800\tx3360\tx3920\tx4480\tx5040\tx5600\tx6160\tx6720\pardirnatural\partightenfactor0
+
+\f2\fs24 \cf0 \
+\uc0\u11835 \
+\pard\tx560\tx1120\tx1680\tx2240\tx2800\tx3360\tx3920\tx4480\tx5040\tx5600\tx6160\tx6720\sl324\slmult1\pardirnatural\partightenfactor0
+
+\f0\fs28 \cf2 \
+
+\f3\b\fs30 Why both detectors matter
+\f0\b0\fs28 \
+\pard\tqr\tx100\tx260\li260\fi-260\sl324\slmult1\sb240\partightenfactor0
+\cf2 	\'95	
+\f1\b \cf2 Circling
+\f0\b0 \cf2  \uc0\u8594  tells you where pilots 
+\f6\i \cf2 chose
+\f0\i0 \cf2  to circle.\
+	\'95	
+\f1\b \cf2 Altitude
+\f0\b0 \cf2  \uc0\u8594  tells you where lift actually 
+\f6\i \cf2 was
+\f0\i0 \cf2 .\
+	\'95	Their overlap = most likely \'93real\'94 thermal.\
+\pard\tx560\tx1120\tx1680\tx2240\tx2800\tx3360\tx3920\tx4480\tx5040\tx5600\tx6160\tx6720\pardirnatural\partightenfactor0
+
+\f2\fs24 \cf0 \
+\uc0\u11835 \
+\pard\tx560\tx1120\tx1680\tx2240\tx2800\tx3360\tx3920\tx4480\tx5040\tx5600\tx6160\tx6720\sl324\slmult1\pardirnatural\partightenfactor0
+
+\f0\fs28 \cf2 \
+
+\f3\b\fs30 Role of the current matcher
+\f0\b0\fs28 \
+\pard\tqr\tx100\tx260\li260\fi-260\sl324\slmult1\sb240\partightenfactor0
+\cf2 	\'95	Right now 
+\f4 match_clusters_strict_v1d.py
+\f0  is our 
+\f1\b \cf2 cross-validation engine
+\f0\b0 \cf2 : it lines up circle vs altitude clusters on the same IGC.\
+	\'95	Later, the 
+\f1\b \cf2 batch scripts
+\f0\b0 \cf2  will use this same logic to only admit thermals that meet:\
+\pard\tqr\tx500\tx660\li660\fi-400\sl324\slmult1\sb240\partightenfactor0
+\cf2 	\'95	Circle + altitude overlap,\
+	\'95	Pass the thresholds (strength, duration, etc.).\
+\pard\tx560\tx1120\tx1680\tx2240\tx2800\tx3360\tx3920\tx4480\tx5040\tx5600\tx6160\tx6720\pardirnatural\partightenfactor0
+
+\f2\fs24 \cf0 \
+\uc0\u11835 \
+\pard\tx560\tx1120\tx1680\tx2240\tx2800\tx3360\tx3920\tx4480\tx5040\tx5600\tx6160\tx6720\sl324\slmult1\pardirnatural\partightenfactor0
+
+\f0\fs28 \cf2 \
+So the flow becomes:IGC \uc0\u8594  circle_clusters_v1r.py \u8594  circle_clusters.csv\
+    \uc0\u8594  overlay_altitude_clusters_v1c.py \u8594  altitude_clusters.csv\
+    \uc0\u8594  match_clusters_strict_v1d.py \u8594  validated_clusters.csv\
+    \uc0\u8594  batch_match_igc_v3*.py \u8594  thermal map\
+\
+\
+
+\f7\i\b\fs36 PIPELINE
+\f0\i0\b0\fs28 \
+\
+\pard\tx560\tx1120\tx1680\tx2240\tx2800\tx3360\tx3920\tx4480\tx5040\tx5600\tx6160\tx6720\sl324\slmult1\pardirnatural\partightenfactor0
+
+\f3\b\fs34 \cf2 \uc0\u55357 \u56960  Development Summary
+\f0\b0\fs28 \cf2 \
+\
+\pard\tx560\tx1120\tx1680\tx2240\tx2800\tx3360\tx3920\tx4480\tx5040\tx5600\tx6160\tx6720\sl324\slmult1\pardirnatural\partightenfactor0
+
+\f3\b\fs30 \cf2 1. Foundational Circle Detection
+\f0\b0\fs28 \
+\pard\tqr\tx100\tx260\li260\fi-260\sl324\slmult1\sb240\partightenfactor0
+\cf2 	\'95	Wrote a fresh parser to read 
+\f1\b \cf2 IGC B-records
+\f0\b0 \cf2  directly.\
+	\'95	Built a circle detector from first principles:\
+\pard\tqr\tx500\tx660\li660\fi-400\sl324\slmult1\sb240\partightenfactor0
+\cf2 	\'95	Detects when cumulative heading change reaches 360\'b0.\
+	\'95	Applies realism filters (duration 6\'9660 s, radius \uc0\u8804 600 m, bank \u8805 5\'b0, climb rate capped).\
+\pard\tqr\tx100\tx260\li260\fi-260\sl324\slmult1\sb240\partightenfactor0
+\cf2 	\'95	Outputs a 
+\f1\b \cf2 per-circle DataFrame/CSV
+\f0\b0 \cf2  with:\
+\pard\tqr\tx500\tx660\li660\fi-400\sl324\slmult1\sb240\partightenfactor0
+\cf2 	\'95	
+\f4 circle_id, seg_id, t_start, t_end, duration_s, avg_speed_kmh, alt_gained_m, climb_rate_ms, turn_radius_m, bank_angle_deg, lat, lon
+\f0 .\
+\
+\pard\tx560\tx1120\tx1680\tx2240\tx2800\tx3360\tx3920\tx4480\tx5040\tx5600\tx6160\tx6720\sl324\slmult1\pardirnatural\partightenfactor0
+
+\f3\b\fs30 \cf2 2. Circle Clustering
+\f0\b0\fs28 \
+\pard\tqr\tx100\tx260\li260\fi-260\sl324\slmult1\sb240\partightenfactor0
+\cf2 	\'95	Grouped individual circles into 
+\f1\b \cf2 thermal clusters
+\f0\b0 \cf2  by spatiotemporal proximity:\
+\pard\tqr\tx500\tx660\li660\fi-400\sl324\slmult1\sb240\partightenfactor0
+\cf2 	\'95	Distance threshold ~200 m.\
+	\'95	Time gap threshold ~300 s.\
+\pard\tqr\tx100\tx260\li260\fi-260\sl324\slmult1\sb240\partightenfactor0
+\cf2 	\'95	Produced 
+\f4 circle_clusters_enriched.csv
+\f0  with per-cluster stats:\
+\pard\tqr\tx500\tx660\li660\fi-400\sl324\slmult1\sb240\partightenfactor0
+\cf2 	\'95	
+\f4 cluster_id, n_segments, n_turns_sum, duration_min, alt_gained_m, av_climb_ms, lat, lon, t_start, t_end
+\f0 .\
+\
+\pard\tx560\tx1120\tx1680\tx2240\tx2800\tx3360\tx3920\tx4480\tx5040\tx5600\tx6160\tx6720\sl324\slmult1\pardirnatural\partightenfactor0
+
+\f3\b\fs30 \cf2 3. Altitude-Based Clustering
+\f0\b0\fs28 \
+\pard\tqr\tx100\tx260\li260\fi-260\sl324\slmult1\sb240\partightenfactor0
+\cf2 	\'95	Independently detected 
+\f1\b \cf2 climb segments
+\f0\b0 \cf2  using altitude time series only:\
+\pard\tqr\tx500\tx660\li660\fi-400\sl324\slmult1\sb240\partightenfactor0
+\cf2 	\'95	Smoothed altitude with rolling median + MAD filter.\
+	\'95	Derived vertical speed (m/s) from rolling linear fits.\
+	\'95	Extracted sustained positive-climb segments (\uc0\u8805 60 s, \u8805 80 m gain).\
+\pard\tqr\tx100\tx260\li260\fi-260\sl324\slmult1\sb240\partightenfactor0
+\cf2 	\'95	Produced 
+\f4 overlay_altitude_clusters.csv
+\f0  with same schema as circle clusters.\
+\
+\pard\tx560\tx1120\tx1680\tx2240\tx2800\tx3360\tx3920\tx4480\tx5040\tx5600\tx6160\tx6720\sl324\slmult1\pardirnatural\partightenfactor0
+
+\f3\b\fs30 \cf2 4. Matching Logic
+\f0\b0\fs28 \
+\pard\tqr\tx100\tx260\li260\fi-260\sl324\slmult1\sb240\partightenfactor0
+\cf2 	\'95	Built a 
+\f1\b \cf2 clean matcher
+\f0\b0 \cf2  comparing circle vs altitude clusters:\
+\pard\tqr\tx500\tx660\li660\fi-400\sl324\slmult1\sb240\partightenfactor0
+\cf2 	\'95	Distance \uc0\u8804  2 km.\
+	\'95	Temporal overlap \uc0\u8805  20%.\
+	\'95	Start time gap \uc0\u8804  900 s.\
+\pard\tqr\tx100\tx260\li260\fi-260\sl324\slmult1\sb240\partightenfactor0
+\cf2 	\'95	Wrote 
+\f4 matched_clusters.csv
+\f0  with successful matches.\
+\
+\pard\tx560\tx1120\tx1680\tx2240\tx2800\tx3360\tx3920\tx4480\tx5040\tx5600\tx6160\tx6720\sl324\slmult1\pardirnatural\partightenfactor0
+
+\f3\b\fs30 \cf2 5. Unified Pipeline
+\f0\b0\fs28 \
+\pard\tqr\tx100\tx260\li260\fi-260\sl324\slmult1\sb240\partightenfactor0
+\cf2 	\'95	Assembled everything into 
+\f1\b \cf2 pipeline_v2c.py
+\f0\b0 \cf2 , a single verified script:\
+\pard\tqr\tx500\tx660\li660\fi-400\sl324\slmult1\sb240\partightenfactor0
+\cf2 	\'95	Prompts once for IGC filename (with default).\
+	\'95	Runs: Circles \uc0\u8594  Circle Clusters \u8594  Altitude Clusters \u8594  Matching.\
+	\'95	Saves four outputs in 
+\f4 outputs/
+\f0 :\
+\pard\tqr\tx900\tx1060\li1060\fi-800\sl324\slmult1\sb240\partightenfactor0
+\cf2 	\'95	
+\f4 \cf2 circles.csv
+\f0 \cf2 \
+	\'95	
+\f4 \cf2 circle_clusters_enriched.csv
+\f0 \cf2 \
+	\'95	
+\f4 \cf2 overlay_altitude_clusters.csv
+\f0 \cf2 \
+	\'95	
+\f4 \cf2 matched_clusters.csv
+\f0 \cf2 \
+\pard\tqr\tx100\tx260\li260\fi-260\sl324\slmult1\sb240\partightenfactor0
+\cf2 	\'95	No external imports, no subprocesses, reproducible in one run.\
+\pard\tx560\tx1120\tx1680\tx2240\tx2800\tx3360\tx3920\tx4480\tx5040\tx5600\tx6160\tx6720\pardirnatural\partightenfactor0
+
+\f2\fs24 \cf0 \
+\uc0\u11835 \
+\pard\tx560\tx1120\tx1680\tx2240\tx2800\tx3360\tx3920\tx4480\tx5040\tx5600\tx6160\tx6720\sl324\slmult1\pardirnatural\partightenfactor0
+
+\f0\fs28 \cf2 \
+\uc0\u9989  
+\f1\b \cf2 We now have a complete, working end-to-end pipeline
+\f0\b0 \cf2 :\
+raw IGC \uc0\u8594  circle-level data \u8594  thermal clusters (two methods) \u8594  validated matches.\
+\
+\pard\tx560\tx1120\tx1680\tx2240\tx2800\tx3360\tx3920\tx4480\tx5040\tx5600\tx6160\tx6720\sl324\slmult1\pardirnatural\partightenfactor0
+
+\f3\b\fs34 \cf2 \uc0\u55357 \u56589  Matching Criteria
+\f0\b0\fs28 \cf2 \
+\
+\pard\tx560\tx1120\tx1680\tx2240\tx2800\tx3360\tx3920\tx4480\tx5040\tx5600\tx6160\tx6720\sl324\slmult1\pardirnatural\partightenfactor0
+
+\f3\b\fs30 \cf2 1. Spatial Proximity
+\f0\b0\fs28 \
+\pard\tqr\tx100\tx260\li260\fi-260\sl324\slmult1\sb240\partightenfactor0
+\cf2 	\'95	We compute 
+\f1\b \cf2 haversine distance
+\f0\b0 \cf2  between the cluster centroids 
+\f4 (lat, lon)
+\f0  of circle and altitude clusters.\
+	\'95	If distance 
+\f4 d \uc0\u8804  EPS_M
+\f0  (default 2000 m), they\'92re considered 
+\f1\b \cf2 spatially close enough
+\f0\b0 \cf2 .\
+\pard\tx560\tx1120\tx1680\tx2240\tx2800\tx3360\tx3920\tx4480\tx5040\tx5600\tx6160\tx6720\pardirnatural\partightenfactor0
+
+\f2\fs24 \cf0 \
+\uc0\u11835 \
+\pard\tx560\tx1120\tx1680\tx2240\tx2800\tx3360\tx3920\tx4480\tx5040\tx5600\tx6160\tx6720\sl324\slmult1\pardirnatural\partightenfactor0
+
+\f0\fs28 \cf2 \
+
+\f3\b\fs30 2. Time Gap
+\f0\b0\fs28 \
+\pard\tqr\tx100\tx260\li260\fi-260\sl324\slmult1\sb240\partightenfactor0
+\cf2 	\'95	Compare 
+\f1\b \cf2 start times
+\f0\b0 \cf2  of the two clusters.\
+	\'95	If absolute difference 
+\f4 |t_start_circle \'96 t_start_alt| \uc0\u8804  MAX_TIME_GAP_S
+\f0  (default 900 s), the pair is considered 
+\f1\b \cf2 temporally aligned
+\f0\b0 \cf2 .\
+\pard\tx560\tx1120\tx1680\tx2240\tx2800\tx3360\tx3920\tx4480\tx5040\tx5600\tx6160\tx6720\pardirnatural\partightenfactor0
+
+\f2\fs24 \cf0 \
+\uc0\u11835 \
+\pard\tx560\tx1120\tx1680\tx2240\tx2800\tx3360\tx3920\tx4480\tx5040\tx5600\tx6160\tx6720\sl324\slmult1\pardirnatural\partightenfactor0
+
+\f0\fs28 \cf2 \
+
+\f3\b\fs30 3. Temporal Overlap
+\f0\b0\fs28 \
+\pard\tqr\tx100\tx260\li260\fi-260\sl324\slmult1\sb240\partightenfactor0
+\cf2 	\'95	Calculate actual 
+\f1\b \cf2 time overlap
+\f0\b0 \cf2  of the two intervals:overlap = max(0, min(t_end_circle, t_end_alt) - max(t_start_circle, t_start_alt))\
+	\'95	Define 
+\f4 overlap_frac = overlap / min(duration_circle, duration_alt)
+\f0 .\
+	\'95	Require 
+\f4 overlap_frac \uc0\u8805  MIN_OVL_FRAC
+\f0  (default 0.20 = 20%).\
+	\'95	This ensures the circle and altitude events are not only near each other but actually 
+\f1\b \cf2 active together in time
+\f0\b0 \cf2 .\
+\pard\tx560\tx1120\tx1680\tx2240\tx2800\tx3360\tx3920\tx4480\tx5040\tx5600\tx6160\tx6720\pardirnatural\partightenfactor0
+
+\f2\fs24 \cf0 \
+\uc0\u11835 \
+\pard\tx560\tx1120\tx1680\tx2240\tx2800\tx3360\tx3920\tx4480\tx5040\tx5600\tx6160\tx6720\sl324\slmult1\pardirnatural\partightenfactor0
+
+\f0\fs28 \cf2 \
+
+\f3\b\fs30 4. Result
+\f0\b0\fs28 \
+\pard\tqr\tx100\tx260\li260\fi-260\sl324\slmult1\sb240\partightenfactor0
+\cf2 	\'95	Only pairs that pass 
+\f1\b \cf2 all three filters
+\f0\b0 \cf2  (distance, time gap, temporal overlap) are kept as matches.\
+	\'95	These go into 
+\f4 matched_clusters.csv
+\f0  with:\
+\pard\tqr\tx500\tx660\li660\fi-400\sl324\slmult1\sb240\partightenfactor0
+\cf2 	\'95	
+\f4 circle_cluster_id
+\f0 \
+	\'95	
+\f4 alt_cluster_id
+\f0 \
+	\'95	
+\f4 dist_m
+\f0  (distance in meters)\
+	\'95	
+\f4 time_overlap_s
+\f0  (raw overlap in seconds)\
+	\'95	
+\f4 overlap_frac
+\f0  (fractional overlap relative to the shorter duration)\
+\pard\tx560\tx1120\tx1680\tx2240\tx2800\tx3360\tx3920\tx4480\tx5040\tx5600\tx6160\tx6720\pardirnatural\partightenfactor0
+
+\f2\fs24 \cf0 \
+\uc0\u11835 \
+\pard\tx560\tx1120\tx1680\tx2240\tx2800\tx3360\tx3920\tx4480\tx5040\tx5600\tx6160\tx6720\sl324\slmult1\pardirnatural\partightenfactor0
+
+\f0\fs28 \cf2 \
+\uc0\u9878 \u65039  
+\f1\b \cf2 So, a match means:
+\f0\b0 \cf2 \
+A circle-based cluster and an altitude-based cluster occurred close together in 
+\f1\b \cf2 space (\uc0\u8804 2 km)
+\f0\b0 \cf2  and 
+\f1\b \cf2 time (\uc0\u8804 15 min apart, \u8805 20% overlapping)
+\f0\b0 \cf2 .\
+\
+\
+################\
+\
+\
+Exactly \uc0\u55357 \u56397  \'97 you\'92ve already done a lot of 
+\f1\b \cf2 first-pass filtering
+\f0\b0 \cf2  upstream:\
+\pard\tqr\tx100\tx260\li260\fi-260\sl324\slmult1\sb240\partightenfactor0
+\cf2 	\'95	Circles \uc0\u8594  filtered by heading-change & duration.\
+	\'95	Circle clusters \uc0\u8594  filtered by centroid & radius.\
+	\'95	Altitude clusters \uc0\u8594  filtered by gain & duration.\
+	\'95	Matched clusters \uc0\u8594  intersection of both.\
+\
+Now the 
+\f1\b \cf2 matched_clusters.csv
+\f0\b0 \cf2  gives you \'93candidate thermals\'94 with their 
+\f1\b \cf2 lat, lon, alt gain, climb rate, etc.
+\f0\b0 \cf2 \
+\pard\tx560\tx1120\tx1680\tx2240\tx2800\tx3360\tx3920\tx4480\tx5040\tx5600\tx6160\tx6720\pardirnatural\partightenfactor0
+
+\f2\fs24 \cf0 \
+\uc0\u11835 \
+\pard\tx560\tx1120\tx1680\tx2240\tx2800\tx3360\tx3920\tx4480\tx5040\tx5600\tx6160\tx6720\sl324\slmult1\pardirnatural\partightenfactor0
+
+\f0\fs28 \cf2 \
+
+\f3\b\fs30 Why another clustering (DBSCAN)?
+\f0\b0\fs28 \
+\
+Even after upstream filters, you\'92ll still get:\
+\pard\tqr\tx100\tx260\li260\fi-260\sl324\slmult1\sb240\partightenfactor0
+\cf2 	\'95	Duplicate thermals (same thermal caught at slightly different times).\
+	\'95	Noise (weak climbs that sneak through).\
+	\'95	Spread-out points (the \'93footprint\'94 of one thermal across several centroids).\
+\
+DBSCAN (or HDBSCAN) is a good fit because:\
+	\'95	It groups points by 
+\f1\b \cf2 spatial density
+\f0\b0 \cf2  (lat/lon proximity).\
+	\'95	It can 
+\f1\b \cf2 filter noise automatically
+\f0\b0 \cf2  (points not in any cluster \uc0\u8594  \'93-1\'94).\
+	\'95	It doesn\'92t require pre-setting the number of clusters (unlike k-means).\
+\pard\tx560\tx1120\tx1680\tx2240\tx2800\tx3360\tx3920\tx4480\tx5040\tx5600\tx6160\tx6720\pardirnatural\partightenfactor0
+
+\f2\fs24 \cf0 \
+\uc0\u11835 \
+\pard\tx560\tx1120\tx1680\tx2240\tx2800\tx3360\tx3920\tx4480\tx5040\tx5600\tx6160\tx6720\sl324\slmult1\pardirnatural\partightenfactor0
+
+\f0\fs28 \cf2 \
+
+\f3\b\fs30 Key Inputs to Tune
+\f0\b0\fs28 \
+\pard\tqr\tx100\tx260\li260\fi-260\sl324\slmult1\sb240\partightenfactor0
+\cf2 	\'95	
+\f1\b \cf2 eps
+\f0\b0 \cf2 : maximum distance (in meters) between points to consider them \'93neighbors\'94.\
+\pard\tqr\tx500\tx660\li660\fi-400\sl324\slmult1\sb240\partightenfactor0
+\cf2 	\'95	You might start around 
+\f1\b 100\'96200 m
+\f0\b0  (typical thermal core radius).\
+\pard\tqr\tx100\tx260\li260\fi-260\sl324\slmult1\sb240\partightenfactor0
+\cf2 	\'95	
+\f1\b \cf2 min_samples
+\f0\b0 \cf2 : minimum number of points needed to form a cluster.\
+\pard\tqr\tx500\tx660\li660\fi-400\sl324\slmult1\sb240\partightenfactor0
+\cf2 	\'95	Start with 2\'963.\
+\pard\tqr\tx100\tx260\li260\fi-260\sl324\slmult1\sb240\partightenfactor0
+\cf2 	\'95	
+\f1\b \cf2 Features
+\f0\b0 \cf2 : Use only lat/lon (converted to meters), or lat/lon + climb_rate if you want to bias by strength.\
+\pard\tx560\tx1120\tx1680\tx2240\tx2800\tx3360\tx3920\tx4480\tx5040\tx5600\tx6160\tx6720\pardirnatural\partightenfactor0
+
+\f2\fs24 \cf0 \
+\uc0\u11835 \
+\pard\tx560\tx1120\tx1680\tx2240\tx2800\tx3360\tx3920\tx4480\tx5040\tx5600\tx6160\tx6720\sl324\slmult1\pardirnatural\partightenfactor0
+
+\f0\fs28 \cf2 \
+
+\f3\b\fs30 Alternatives to DBSCAN
+\f0\b0\fs28 \
+\pard\tqr\tx100\tx260\li260\fi-260\sl324\slmult1\sb240\partightenfactor0
+\cf2 	\'95	
+\f1\b \cf2 HDBSCAN
+\f0\b0 \cf2  \uc0\u8594  more adaptive, no single eps, but requires extra lib.\
+	\'95	
+\f1\b \cf2 OPTICS
+\f0\b0 \cf2  \uc0\u8594  similar to DBSCAN, more flexible with variable density.\
+	\'95	
+\f1\b \cf2 Hierarchical clustering
+\f0\b0 \cf2  \uc0\u8594  if you want to explicitly merge clusters at different scales.\
+\
+But DBSCAN is a 
+\f1\b \cf2 good first step
+\f0\b0 \cf2 : simple, robust, and interpretable.\
+\pard\tx560\tx1120\tx1680\tx2240\tx2800\tx3360\tx3920\tx4480\tx5040\tx5600\tx6160\tx6720\pardirnatural\partightenfactor0
+
+\f2\fs24 \cf0 \
+\uc0\u11835 \
+\pard\tx560\tx1120\tx1680\tx2240\tx2800\tx3360\tx3920\tx4480\tx5040\tx5600\tx6160\tx6720\sl324\slmult1\pardirnatural\partightenfactor0
+
+\f0\fs28 \cf2 \
+\uc0\u55357 \u56481  So the workflow becomes:\
+\pard\tqr\tx260\tx420\li420\fi-420\sl324\slmult1\sb240\partightenfactor0
+
+\f5 \cf2 	1.	Generate 
+\f4 matched_clusters.csv
+\f0  (your pipeline already does this).\
+
+\f5 	2.	Apply 
+\f1\b DBSCAN on (lat, lon)
+\f0\b0  to merge overlapping thermals.\
+
+\f5 	3.	For each DBSCAN cluster:\
+\pard\tqr\tx500\tx660\li660\fi-660\sl324\slmult1\sb240\partightenfactor0
+\cf2 	\'95	Report centroid (mean lat/lon).\
+	\'95	Spread (max pairwise distance or convex hull size).\
+	\'95	Strength (mean or max climb rate / gain).\
+\
+\
+#############\
+\
+\
+python build_waypoints_v1.py \\\
+  --inputs-root outputs/batch_csv \\\
+  --method dbscan \\\
+  --eps-km 5 \\\
+  --min-samples 2 \\\
+  --strength-min 1.0 \\\
+  --out-csv outputs/waypoints/thermal_waypoints_v1.csv \\\
+  --out-geojson outputs/waypoints/thermal_waypoints_v1.geojson\
+# optional\
+  [--date-start YYYY-MM-DD] [--date-end YYYY-MM-DD]\
+  [--debug-log outputs/waypoints/grouping_debug.log]\
+\
+\
+\pard\tx560\tx1120\tx1680\tx2240\tx2800\tx3360\tx3920\tx4480\tx5040\tx5600\tx6160\tx6720\sl324\slmult1\pardirnatural\partightenfactor0
+
+\f8\b \cf2 Defaults:
+\f0\b0 \
+\pard\tqr\tx100\tx260\li260\fi-260\sl324\slmult1\sb240\partightenfactor0
+\cf2 	\'95	
+\f4 --inputs-root
+\f0 : 
+\f4 outputs/batch_csv
+\f0 \
+	\'95	
+\f4 --method
+\f0 : 
+\f4 dbscan
+\f0 \
+	\'95	
+\f4 --eps-km
+\f0 : 
+\f4 5
+\f0 \
+	\'95	
+\f4 --min-samples
+\f0 : 
+\f4 2
+\f0 \
+	\'95	
+\f4 --strength-min
+\f0 : 
+\f4 1.0
+\f0 \
+	\'95	
+\f4 --out-*
+\f0 : as above\
+	\'95	If date filters are absent, we ignore dates entirely.\
+\
+\pard\tx560\tx1120\tx1680\tx2240\tx2800\tx3360\tx3920\tx4480\tx5040\tx5600\tx6160\tx6720\sl324\slmult1\pardirnatural\partightenfactor0
+
+\f3\b\fs34 \cf2 Integration with batch
+\f0\b0\fs28 \cf2 \
+\
+Two clean options\'97both supported:\
+\pard\tqr\tx260\tx420\li420\fi-420\sl324\slmult1\sb240\partightenfactor0
+
+\f5 \cf2 	1.	
+\f1\b Flag on batcher (recommended)
+\f0\b0 \
+Add to 
+\f4 batch_run_v3.py
+\f0 :\
+\pard\tqr\tx500\tx660\li660\fi-660\sl324\slmult1\sb240\partightenfactor0
+\cf2 	\'95	
+\f4 --make-waypoints
+\f0  \uc0\u8594  after flight loop completes, call:\
+python build_waypoints_v1.py --inputs-root outputs/batch_csv\
+	\'95	
+\f4 --waypoints-method/--eps-km/--min-samples/--strength-min
+\f0  are passed through\
+\
+\pard\tqr\tx260\tx420\li420\fi-420\sl324\slmult1\sb240\partightenfactor0
+
+\f5 \cf2 	2.	
+\f1\b Manual step
+\f0\b0 \
+Run the post-processor whenever you want after a batch:\
+python build_waypoints_v1.py\
+\pard\tx560\tx1120\tx1680\tx2240\tx2800\tx3360\tx3920\tx4480\tx5040\tx5600\tx6160\tx6720\sl324\slmult1\pardirnatural\partightenfactor0
+\cf2 This keeps batch vs post clean while letting you one-shot it from the batcher when desired.\
+\
+\pard\tx560\tx1120\tx1680\tx2240\tx2800\tx3360\tx3920\tx4480\tx5040\tx5600\tx6160\tx6720\sl324\slmult1\pardirnatural\partightenfactor0
+
+\f3\b\fs34 \cf2 Later (nice-to-haves, not now)
+\f0\b0\fs28 \cf2 \
+\pard\tqr\tx100\tx260\li260\fi-260\sl324\slmult1\sb240\partightenfactor0
+\cf2 	\'95	Optional 
+\f1\b \cf2 time decay
+\f0\b0 \cf2  weighting for centroid\
+	\'95	Seasonal builds (
+\f4 --season mm-mm
+\f0  presets)\
+	\'95	Alternate centroid = strength-weighted median\
+	\'95	HDBSCAN/OPTICS fully wired under 
+\f4 --method}

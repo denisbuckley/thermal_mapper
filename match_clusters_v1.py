@@ -47,112 +47,78 @@ def match_clusters(circle_df, alt_df, eps_m=2000.0, min_ovl_frac=0.20, max_time_
 def main():
     import argparse, json
     from pathlib import Path
+    import pandas as pd
 
     ap = argparse.ArgumentParser()
+    # Positional args optional → convenient manual runs; pipeline passes explicit names
     ap.add_argument("circles", nargs="?", help="Path to circle_clusters_enriched.csv")
     ap.add_argument("alts", nargs="?", help="Path to altitude_clusters.csv")
-    ap.add_argument("--out", help="Output CSV (default: outputs/matched_clusters.csv)")
+    ap.add_argument("--out", help="Output CSV (default: matched_clusters.csv)")
     args = ap.parse_args()
 
-    # Defaults
-    default_circles = Path("outputs/circle_clusters_enriched.csv")
-    default_alts = Path("outputs/altitude_clusters.csv")
-    default_out = Path("outputs/matched_clusters.csv")
+    # Resolve paths (fallback to filenames in current dir)
+    circles_path = Path(args.circles) if args.circles else Path("circle_clusters_enriched.csv")
+    alts_path    = Path(args.alts)    if args.alts    else Path("altitude_clusters.csv")
+    out_path     = Path(args.out)     if args.out     else Path("matched_clusters.csv")
 
-    circles_path = Path(args.circles) if args.circles else Path("outputs/circle_clusters_enriched.csv")
-    alts_path = Path(args.alts) if args.alts else Path("outputs/altitude_clusters.csv")
-    out_path = Path(args.out) if args.out else Path("outputs/matched_clusters.csv")
-    if not circles_path.exists() or not alts_path.exists():
-        print("[ERROR] Missing required inputs. Ensure both circle and altitude cluster CSVs exist in outputs/.")
+    missing = [p for p in (circles_path, alts_path) if not p.exists()]
+    if missing:
+        print("[ERROR] Missing required inputs:")
+        for p in missing:
+            print("  -", p)
         return 1
 
+    # Load inputs
     circles = pd.read_csv(circles_path)
-    alts = pd.read_csv(alts_path)
+    alts    = pd.read_csv(alts_path)
 
-    # 🔑 returns (matches_df, stats_dict)
+    # Core matching (assumes match_clusters(circles, alts) exists in this module)
     matches, stats = match_clusters(circles, alts)
 
-    # --- Enrich with lat/lon from both inputs ---
+    # Minimal columns for coord+rate enrichment
+    circle_coords = circles[[c for c in ("cluster_id","lat","lon") if c in circles.columns]].copy()
+    alt_cols = [c for c in ("cluster_id","lat","lon","alt_gain_m","duration_s","climb_rate_ms") if c in alts.columns]
+    alt_coords = alts[alt_cols].copy()
 
-    def _pick_cols(df, id_col_candidates=("cluster_id", "circle_cluster_id", "alt_cluster_id", "id"),
-                   lat_candidates=("lat", "centroid_lat", "lat_c", "latitude"),
-                   lon_candidates=("lon", "centroid_lon", "lon_c", "longitude")):
-        """Return a minimal (id, lat, lon) frame, renaming to cluster_id/lat/lon as needed."""
-        df2 = df.copy()
-        # id
-        for c in id_col_candidates:
-            if c in df2.columns:
-                if c != "cluster_id":
-                    df2 = df2.rename(columns={c: "cluster_id"})
-                break
+    # Merge circle coords into canonical lat/lon
+    enriched = matches.merge(
+        circle_coords.rename(columns={"lat":"lat","lon":"lon"}),
+        left_on="circle_cluster_id", right_on="cluster_id", how="left", suffixes=("", "")
+    ).drop(columns=["cluster_id"], errors="ignore")
+
+    # Merge altitude coords; keep *_alt temp columns
+    enriched = enriched.merge(
+        alt_coords.rename(columns={"lat":"lat","lon":"lon"}),
+        left_on="alt_cluster_id", right_on="cluster_id", how="left", suffixes=("", "_alt")
+    ).drop(columns=["cluster_id"], errors="ignore")
+
+    # If both circle+alt coords present, average; else keep whichever exists
+    if "lat_alt" in enriched.columns and "lon_alt" in enriched.columns:
+        enriched["lat"] = enriched[["lat","lat_alt"]].mean(axis=1, skipna=True)
+        enriched["lon"] = enriched[["lon","lon_alt"]].mean(axis=1, skipna=True)
+        enriched = enriched.drop(columns=["lat_alt","lon_alt"])
+
+    if "lat" not in enriched.columns or "lon" not in enriched.columns:
+        raise ValueError("No usable lat/lon columns to create unified coords")
+
+    # Ensure climb_rate_ms present (compute if needed)
+    if "climb_rate_ms" not in enriched.columns:
+        if {"alt_gain_m","duration_s"} <= set(enriched.columns):
+            enriched["climb_rate_ms"] = enriched["alt_gain_m"] / enriched["duration_s"].replace(0, pd.NA)
         else:
-            # synthesize if missing
-            df2 = df2.reset_index(drop=True)
-            df2["cluster_id"] = df2.index
+            enriched["climb_rate_ms"] = pd.NA
 
-        # lat/lon
-        lat_col = next((c for c in lat_candidates if c in df2.columns), None)
-        lon_col = next((c for c in lon_candidates if c in df2.columns), None)
-        if lat_col is None or lon_col is None:
-            # If coords absent, keep empty lat/lon to avoid KeyErrors
-            df2["lat"] = pd.NA
-            df2["lon"] = pd.NA
-        else:
-            if lat_col != "lat": df2 = df2.rename(columns={lat_col: "lat"})
-            if lon_col != "lon": df2 = df2.rename(columns={lon_col: "lon"})
-        return df2[["cluster_id", "lat", "lon"]].copy()
-
-    # Normalize ID columns in matches to have canonical names for joining
-    def _ensure_match_ids(m):
-        if "circle_cluster_id" not in m.columns:
-            # common aliases
-            for c in ("circle_id", "circle_cluster", "circle"):
-                if c in m.columns:
-                    m = m.rename(columns={c: "circle_cluster_id"})
-                    break
-        if "alt_cluster_id" not in m.columns:
-            for c in ("alt_id", "alt_cluster", "alt"):
-                if c in m.columns:
-                    m = m.rename(columns={c: "alt_cluster_id"})
-                    break
-        return m
-
-    matches = _ensure_match_ids(matches)
-
-    circle_coords = _pick_cols(circles)
-    alt_coords = _pick_cols(alts)
-
-    # Join circle coords
-    enriched = matches.merge(circle_coords, left_on="circle_cluster_id", right_on="cluster_id", how="left",
-                             suffixes=("", ""))
-    enriched = enriched.rename(columns={"lat": "circle_lat", "lon": "circle_lon"}).drop(columns=["cluster_id"])
-
-    # Join altitude coords
-    enriched = enriched.merge(alt_coords, left_on="alt_cluster_id", right_on="cluster_id", how="left",
-                              suffixes=("", ""))
-    enriched = enriched.rename(columns={"lat": "alt_lat", "lon": "alt_lon"}).drop(columns=["cluster_id"])
-
-    # Provide unified lat/lon (prefer circle centroid, fallback to altitude centroid)
-    enriched["lat"] = enriched["circle_lat"].where(enriched["circle_lat"].notna(), enriched["alt_lat"])
-    enriched["lon"] = enriched["circle_lon"].where(enriched["circle_lon"].notna(), enriched["alt_lon"])
-
-    # Optional: also a simple mean of both, when both present
-    enriched["lat_mean"] = pd.concat([enriched["circle_lat"], enriched["alt_lat"]], axis=1).mean(axis=1, skipna=True)
-    enriched["lon_mean"] = pd.concat([enriched["circle_lon"], enriched["alt_lon"]], axis=1).mean(axis=1, skipna=True)
-
-    # Save matches CSV (now enriched)
-    out_path.parent.mkdir(parents=True, exist_ok=True)
+    # Write outputs
     enriched.to_csv(out_path, index=False)
     print(f"[OK] wrote {len(enriched)} matches → {out_path}")
 
-    # Save stats JSON alongside
-    stats_path = out_path.with_suffix(".json")
-    with open(stats_path, "w") as f:
+    # JSON stats alongside CSV
+    json_path = out_path.with_suffix(".json")
+    with open(json_path, "w") as f:
         json.dump(stats, f, indent=2)
-    print(f"[OK] wrote stats → {stats_path}")
+    print(f"[OK] wrote stats → {json_path}")
 
     return 0
-
 if __name__ == "__main__":
     main()
 

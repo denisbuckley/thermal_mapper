@@ -1,46 +1,32 @@
 #!/usr/bin/env python3
 # -*- coding: utf-8 -*-
 """
-pipeline_v4.py — MONOLITHIC, no subprocesses, no imports of your other scripts.
+pipeline_v4.py — MONOLITHIC (no subprocesses, no imports of your v1 scripts)
 
-Runs the full chain for ONE IGC file:
+Flow for ONE IGC:
   1) Parse IGC B-records → track DataFrame
   2) Detect circling segments (“circles”) → circles.csv
-  3) Cluster circles (spatial DBSCAN / fallback) → circle_clusters_enriched.csv
+  3) Cluster circles → circle_clusters_enriched.csv
   4) Detect altitude-only climb segments → altitude_clusters.csv
-  5) Match circle clusters ↔ altitude clusters (spatial + temporal) → matched_clusters.csv + .json
+  5) Match circle clusters ↔ altitude clusters → matched_clusters.csv + .json
 
-I/O rules (run from repo ROOT):
-  - Input IGC:
-      * Either pass as CLI positional arg, e.g.:
-          python pipeline_v4.py "igc/2013-12-15 Justin Fitzgerald 388409.igc"
-        (Absolute or relative ok. If relative and inside ./igc, we resolve accordingly.)
-      * Or run without arg and you’ll be prompted to type a filename that exists under ./igc.
-        (No automatic default; empty input aborts.)
-  - Outputs:
-      outputs/batch_csv/<flight_stem>/
-        circles.csv
-        circle_clusters_enriched.csv
-        altitude_clusters.csv
-        matched_clusters.csv
-        matched_clusters.json
-        pipeline_debug.log
+I/O (run from repo ROOT):
+  inputs:  ./igc/<file>.igc  (enter filename when prompted, or pass as CLI arg)
+  outputs: ./outputs/batch_csv/<flight_stem>/
+             circles.csv
+             circle_clusters_enriched.csv
+             altitude_clusters.csv
+             matched_clusters.csv
+             matched_clusters.json
+             pipeline_debug.log
 
-Notes:
-  - This file contains inlined implementations for parsing, circle detection, clustering,
-    altitude clustering, and matching. It does NOT import or call your v1 scripts.
-  - Circle clustering uses scikit-learn DBSCAN if available; otherwise a deterministic
-    distance-threshold union-find fallback (keeps behavior stable without external deps).
-  - Matching is one circle-cluster ↔ best altitude-cluster (max temporal overlap, then nearest).
-    Adjust to many-to-one if you wish.
-
-Tuning knobs (CLI flags):
-  --circle-eps-m           (default 200 m)  spatial eps for DBSCAN/fallback
-  --circle-min-samples     (default 2)
-  --alt-min-gain           (default 30 m)
-  --alt-min-duration       (default 20 s)
-  --match-max-dist-m       (default 600 m)
-  --match-min-overlap      (default 0.25)
+Tuning flags:
+  --circle-eps-m (m, default 200)
+  --circle-min-samples (default 2)
+  --alt-min-gain (m, default 30)
+  --alt-min-duration (s, default 20)
+  --match-max-dist-m (m, default 600)
+  --match-min-overlap (0..1, default 0.25)
 """
 
 from __future__ import annotations
@@ -214,7 +200,7 @@ def detect_circles(df: pd.DataFrame,
 
 
 # ---------------------------------------------------------------------------
-# 3) Cluster circles (spatial)
+# 3) Cluster circles (spatial) — includes cluster-level climb_rate_ms
 # ---------------------------------------------------------------------------
 def cluster_circles(circles: pd.DataFrame,
                     eps_m: float = 200.0,
@@ -225,20 +211,17 @@ def cluster_circles(circles: pd.DataFrame,
     Returns columns:
       cluster_id, lat, lon, t_start, t_end, n_circles,
       climb_rate_ms, climb_rate_ms_median, alt_gain_m_mean, duration_s_mean
-    (If any source columns are missing, those aggregates become NaN.)
     """
+    base_cols = [
+        "cluster_id","lat","lon","t_start","t_end","n_circles",
+        "climb_rate_ms","climb_rate_ms_median","alt_gain_m_mean","duration_s_mean"
+    ]
     if circles.empty:
-        return pd.DataFrame(columns=[
-            "cluster_id","lat","lon","t_start","t_end","n_circles",
-            "climb_rate_ms","climb_rate_ms_median","alt_gain_m_mean","duration_s_mean"
-        ])
+        return pd.DataFrame(columns=base_cols)
 
     d = circles.dropna(subset=["lat","lon"]).copy()
     if d.empty:
-        return pd.DataFrame(columns=[
-            "cluster_id","lat","lon","t_start","t_end","n_circles",
-            "climb_rate_ms","climb_rate_ms_median","alt_gain_m_mean","duration_s_mean"
-        ])
+        return pd.DataFrame(columns=base_cols)
 
     # --- label points into clusters (DBSCAN if available; else union-find fallback)
     if _HAVE_SKLEARN:
@@ -284,10 +267,7 @@ def cluster_circles(circles: pd.DataFrame,
         d["cluster_id"] = labels
 
     if d.empty:
-        return pd.DataFrame(columns=[
-            "cluster_id","lat","lon","t_start","t_end","n_circles",
-            "climb_rate_ms","climb_rate_ms_median","alt_gain_m_mean","duration_s_mean"
-        ])
+        return pd.DataFrame(columns=base_cols)
 
     # --- aggregate per cluster, carrying climb stats
     has_climb = "climb_rate_ms" in d.columns
@@ -303,7 +283,6 @@ def cluster_circles(circles: pd.DataFrame,
             "t_start": float(sub["t_start"].min() if "t_start" in sub.columns else float("nan")),
             "t_end":   float(sub["t_end"].max() if "t_end" in sub.columns else float("nan")),
             "n_circles": int(len(sub)),
-            # defaults as NaN; fill if source cols exist
             "climb_rate_ms": float("nan"),
             "climb_rate_ms_median": float("nan"),
             "alt_gain_m_mean": float("nan"),
@@ -319,7 +298,10 @@ def cluster_circles(circles: pd.DataFrame,
 
         rows.append(rec)
 
-    return pd.DataFrame(rows).sort_values("cluster_id").reset_index(drop=True)
+    df = pd.DataFrame(rows).sort_values("cluster_id").reset_index(drop=True)
+    # Deterministic column order
+    return df[[c for c in base_cols if c in df.columns]]
+
 
 # ---------------------------------------------------------------------------
 # 4) Altitude-only climb clusters
@@ -332,8 +314,9 @@ def detect_altitude_clusters(track: pd.DataFrame,
     Output:
       t_start, t_end, duration_s, alt_gain_m, climb_rate_ms, lat, lon
     """
+    cols = ["t_start","t_end","duration_s","alt_gain_m","climb_rate_ms","lat","lon"]
     if track.empty:
-        return pd.DataFrame(columns=["t_start","t_end","duration_s","alt_gain_m","climb_rate_ms","lat","lon"])
+        return pd.DataFrame(columns=cols)
 
     clusters = []
     start_i = None
@@ -373,7 +356,10 @@ def detect_altitude_clusters(track: pd.DataFrame,
                 "lat": float(seg.lat.mean()),
                 "lon": float(seg.lon.mean()),
             })
-    return pd.DataFrame(clusters)
+
+    df = pd.DataFrame(clusters)
+    # Deterministic column order
+    return df[cols] if not df.empty else pd.DataFrame(columns=cols)
 
 
 # ---------------------------------------------------------------------------
@@ -414,7 +400,7 @@ def match_clusters(circle_clusters: pd.DataFrame,
         for a in alt_clusters.itertuples(index=False):
             d = haversine_m(c.lat, c.lon, a.lat, a.lon)
             if d > max_dist_m: continue
-            ov, of = _overlap(c.t_start, c.t_end, a.t_start, a.t_end)
+            ov, of = _overlap(c.t_start, c.t_end, a.t_start, a_tend:=a.t_end)
             if of < min_overlap_frac: continue
             key = (of, d)
             if key > best_key:
@@ -424,13 +410,13 @@ def match_clusters(circle_clusters: pd.DataFrame,
             a, dist_m, ov, of = best
             out.append({
                 "circle_cluster_id": int(getattr(c, "cluster_id", 0)),
-                "alt_cluster_id":    int(getattr(a, "cluster_id", 0)),
+                "alt_cluster_id":    int(getattr(a, "cluster_id", 0)) if "cluster_id" in alt_clusters.columns else 0,
                 "dist_m": float(dist_m),
                 "time_overlap_s": float(ov),
                 "overlap_frac": float(of),
                 "circle_lat": float(c.lat), "circle_lon": float(c.lon),
                 "alt_lat": float(a.lat),   "alt_lon": float(a.lon),
-                # unified point = midpoint (can change to weighted later)
+                # unified point = midpoint (simple, deterministic)
                 "lat": float((c.lat + a.lat)/2),
                 "lon": float((c.lon + a.lon)/2),
                 "alt_gain_m": float(getattr(a, "alt_gain_m", float("nan"))),
@@ -439,13 +425,15 @@ def match_clusters(circle_clusters: pd.DataFrame,
             })
             used.add(int(getattr(a, "cluster_id", -1)))
 
-    matches = pd.DataFrame(out, columns=cols)
+    df = pd.DataFrame(out, columns=cols)
+    # Deterministic column order
+    df = df[cols] if not df.empty else pd.DataFrame(columns=cols)
     stats = {
-        "pairs": int(len(matches)),
+        "pairs": int(len(df)),
         "max_dist_m": float(max_dist_m),
         "min_overlap_frac": float(min_overlap_frac),
     }
-    return matches, stats
+    return df, stats
 
 
 # ---------------------------------------------------------------------------
@@ -495,35 +483,67 @@ def main() -> int:
 
     # --- 2) Circles
     circles = detect_circles(track)
+    # enforce canonical order for circles.csv
+    circles_cols = ["t_start","t_end","duration_s","lat","lon","alt_gain_m","climb_rate_ms"]
+    if not circles.empty:
+        circles = circles.reindex(columns=[c for c in circles_cols if c in circles.columns])
+    else:
+        circles = pd.DataFrame(columns=circles_cols)
+
     circles_csv = run_dir / "circles.csv"
     circles.to_csv(circles_csv, index=False)
     logf_write(logf, f"[OK] wrote {len(circles)} circles → {circles_csv}")
 
     # --- 3) Circle clusters
     cc = cluster_circles(circles, eps_m=args.circle_eps_m, min_samples=args.circle_min_samples)
+    # enforce canonical order for circle_clusters_enriched.csv
+    cc_cols = [
+        "cluster_id","lat","lon","t_start","t_end","n_circles",
+        "climb_rate_ms","climb_rate_ms_median","alt_gain_m_mean","duration_s_mean"
+    ]
+    if not cc.empty:
+        cc = cc.reindex(columns=[c for c in cc_cols if c in cc.columns])
+    else:
+        cc = pd.DataFrame(columns=cc_cols)
+
     cc_csv = run_dir / "circle_clusters_enriched.csv"
     cc.to_csv(cc_csv, index=False)
     logf_write(logf, f"[OK] wrote {len(cc)} circle clusters → {cc_csv}")
 
     # --- 4) Altitude clusters
     alts = detect_altitude_clusters(track, min_gain_m=args.alt_min_gain, min_duration_s=args.alt_min_duration)
+    # enforce canonical order for altitude_clusters.csv
+    alt_cols = ["t_start","t_end","duration_s","alt_gain_m","climb_rate_ms","lat","lon"]
+    if not alts.empty:
+        alts = alts.reindex(columns=alt_cols)
+    else:
+        alts = pd.DataFrame(columns=alt_cols)
+
     alt_csv = run_dir / "altitude_clusters.csv"
     alts.to_csv(alt_csv, index=False)
     logf_write(logf, f"[OK] wrote {len(alts)} altitude clusters → {alt_csv}")
 
     # --- 5) Matching
+    cc_for_match = cc.rename(columns={"cluster_id":"cluster_id"})  # already good
     matches, stats = match_clusters(
-        cc if "cluster_id" in cc.columns else pd.DataFrame(columns=["cluster_id","lat","lon","t_start","t_end"]),
+        cc_for_match if not cc_for_match.empty else pd.DataFrame(columns=["cluster_id","lat","lon","t_start","t_end"]),
         alts,
         max_dist_m=args.match_max_dist_m,
         min_overlap_frac=args.match_min_overlap
     )
+    # enforce canonical order for matched_clusters.csv
+    match_cols = ["circle_cluster_id","alt_cluster_id","dist_m","time_overlap_s","overlap_frac",
+                  "circle_lat","circle_lon","alt_lat","alt_lon","lat","lon","alt_gain_m","duration_s","climb_rate_ms"]
+    if not matches.empty:
+        matches = matches.reindex(columns=match_cols)
+    else:
+        matches = pd.DataFrame(columns=match_cols)
+
     match_csv  = run_dir / "matched_clusters.csv"
     matches.to_csv(match_csv, index=False)
 
     match_json = run_dir / "matched_clusters.json"
     payload = {"stats": stats, "rows": int(len(matches))}
-    # quick numeric summary if present
     if len(matches):
         summary = {}
         for c in ["dist_m","time_overlap_s","overlap_frac","climb_rate_ms","alt_gain_m","duration_s"]:

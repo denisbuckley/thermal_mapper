@@ -217,35 +217,102 @@ def detect_circles(df, min_duration_s=6.0, max_duration_s=60.0, min_radius_m=8.0
 def main():
     import argparse
     from pathlib import Path
+    import shutil
+    import pandas as pd  # if your file already imports pandas at top, this is harmless
 
     ap = argparse.ArgumentParser()
     ap.add_argument("igc", nargs="?", help="Path to IGC file")
-    ap.add_argument("--out", help="Path to output circles.csv")
     args = ap.parse_args()
 
     # Defaults
     default_igc = Path("igc/2020-11-08 Lumpy Paterson 108645.igc")
-    default_out = Path("outputs/circles.csv")
+    out_root = Path("outputs/batch_csv")
 
-    # IGC input
+    # Resolve IGC path (arg or prompt)
     if args.igc:
         igc_path = Path(args.igc)
     else:
-        user_in = input(f"Enter path to IGC file [default: {default_igc}]: ").strip()
-        igc_path = Path(user_in) if user_in else default_igc
+        inp = input(f"Enter IGC file path [default: {default_igc}]: ").strip()
+        igc_path = Path(inp) if inp else default_igc
 
-    # Output
-    out_path = Path(args.out) if args.out else default_out
+    if not igc_path.exists():
+        raise FileNotFoundError(igc_path)
 
-    # Ensure parent folder exists
-    out_path.parent.mkdir(parents=True, exist_ok=True)
+    # Compute per-flight run directory under outputs/batch_csv/<flight_basename>
+    # (strip trailing ')' if present, and collapse whitespace)
+    flight = igc_path.stem.rstrip(')').strip()
+    run_dir = out_root / flight
+    run_dir.mkdir(parents=True, exist_ok=True)
 
-    # === existing circle logic ===
-    df = parse_igc_brecords(igc_path)  # your existing function
-    circles = detect_circles(df)       # your existing function
-    circles.to_csv(out_path, index=False)
+    # Copy the source IGC into the run_dir (overwrite if it exists)
+    igc_local = run_dir / igc_path.name
+    try:
+        shutil.copy2(igc_path, igc_local)
+    except Exception:
+        # If source and dest are the same file, ignore
+        if igc_path.resolve() != igc_local.resolve():
+            raise
 
-    print(f"[OK] wrote {out_path}")
+    # Parse B-records and write circles.csv in the run_dir
+    df = parse_igc_brecords(igc_local)
+    out_csv = run_dir / "circles.csv"
+    # ----- STANDARDIZE SCHEMA & ORDER (CIRCLES) -----
+    d = df.reset_index(drop=True).copy()
 
+    # Map common variants -> canonical names
+    ren = {}
+    for cand in ["lat", "lat_mean", "center_lat", "circle_lat"]:
+        if cand in d.columns and cand != "lat":
+            ren[cand] = "lat";
+            break
+    for cand in ["lon", "lon_mean", "center_lon", "circle_lon"]:
+        if cand in d.columns and cand != "lon":
+            ren[cand] = "lon";
+            break
+
+    for cand in ["t_start", "start_s", "t0", "time_start_s", "start"]:
+        if cand in d.columns and cand != "t_start":
+            ren[cand] = "t_start";
+            break
+    for cand in ["t_end", "end_s", "t1", "time_end_s", "end"]:
+        if cand in d.columns and cand != "t_end":
+            ren[cand] = "t_end";
+            break
+
+    # Promote common aggregates
+    if "alt_gain_m_mean" in d.columns and "alt_gain_m" not in d.columns:
+        ren["alt_gain_m_mean"] = "alt_gain_m"
+    if "duration_s_mean" in d.columns and "duration_s" not in d.columns:
+        ren["duration_s_mean"] = "duration_s"
+    if "climb_rate_ms_mean" in d.columns and "climb_rate_ms" not in d.columns:
+        ren["climb_rate_ms_mean"] = "climb_rate_ms"
+
+    if ren:
+        d = d.rename(columns=ren)
+
+    # Synthesize missing metrics when possible
+    if "duration_s" not in d.columns and {"t_start", "t_end"} <= set(d.columns):
+        d["duration_s"] = d["t_end"] - d["t_start"]
+
+    if "alt_gain_m" not in d.columns and {"alt_start_m", "alt_end_m"} <= set(d.columns):
+        d["alt_gain_m"] = d["alt_end_m"] - d["alt_start_m"]
+
+    if "climb_rate_ms" not in d.columns and {"alt_gain_m", "duration_s"} <= set(d.columns):
+        d["climb_rate_ms"] = d["alt_gain_m"] / d["duration_s"].replace(0, pd.NA)
+
+    # Canonical order + extras
+    canon = ["lat", "lon", "climb_rate_ms", "alt_gain_m", "duration_s", "t_start", "t_end"]
+    extras = [c for c in d.columns if c not in canon]
+    d = d[[c for c in canon if c in d.columns] + extras]
+
+    # Write
+    d.to_csv(out_csv, index=False)
+    print(f"[OK] wrote {len(d)} circles → {out_csv}")
+
+    #print(f"[OK] wrote {len(df)} circles → {out_csv}")
+    return 0
+
+if __name__ == "__main__":
+    raise SystemExit(main())
 if __name__ == "__main__":
     main()

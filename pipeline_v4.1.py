@@ -65,6 +65,18 @@ ROOT     = Path.cwd()
 IGC_DIR  = ROOT / "igc"
 OUT_ROOT = ROOT / "outputs" / "batch_csv"
 
+# --- Tuning (read from tuning.json written by tuning_v1.py) ---
+import json
+TUNING_FILE = ROOT / "tuning.json"
+
+def load_tuning() -> dict:
+    if TUNING_FILE.exists():
+        try:
+            return json.loads(TUNING_FILE.read_text(encoding="utf-8"))
+        except Exception as e:
+            raise RuntimeError(f"Failed to parse {TUNING_FILE}: {e}")
+    raise FileNotFoundError(f"Tuning file not found: {TUNING_FILE}")
+
 def logf_write(logf: Path, msg: str) -> None:
     ts = time.strftime("%Y-%m-%d %H:%M:%S")
     logf.parent.mkdir(parents=True, exist_ok=True)
@@ -479,11 +491,34 @@ def main() -> int:
         print(f"[ERROR] IGC not found: {igc_path}", file=sys.stderr)
         return 2
 
+    # Load tuning at runtime
+    cfg = load_tuning()
+    circle_eps_m = float(cfg["circle_eps_m"])
+    circle_min_samples = int(cfg["circle_min_samples"])
+    alt_min_gain = float(cfg["alt_min_gain"])
+    alt_min_duration = float(cfg["alt_min_duration"])
+    match_max_dist_m = float(cfg["match_max_dist_m"])
+    match_min_overlap = float(cfg["match_min_overlap"])
+
     flight = igc_path.stem
     run_dir = OUT_ROOT / flight
     wipe_run_dir(run_dir)
     logf = run_dir / "pipeline_debug.log"
-    logf_write(logf, "===== pipeline_v4 (monolithic) start =====")
+    logf_write(logf, "===== pipeline_v4.1 (monolithic) start =====")
+    # Write to log file
+    logf_write(
+        logf,
+        f"TUNING: circle_eps_m={circle_eps_m}, circle_min_samples={circle_min_samples}, "
+        f"alt_min_gain={alt_min_gain}, alt_min_duration={alt_min_duration}, "
+        f"match_max_dist_m={match_max_dist_m}, match_min_overlap={match_min_overlap}"
+    )
+
+    # Echo to console
+    print(
+        f"[TUNING] circle_eps_m={circle_eps_m}, circle_min_samples={circle_min_samples}, "
+        f"alt_min_gain={alt_min_gain}, alt_min_duration={alt_min_duration}, "
+        f"match_max_dist_m={match_max_dist_m}, match_min_overlap={match_min_overlap}"
+    )
     logf_write(logf, f"IGC: {igc_path}")
     logf_write(logf, f"RUN_DIR: {run_dir}")
 
@@ -513,7 +548,8 @@ def main() -> int:
     logf_write(logf, f"[OK] wrote {len(circles)} circles → {circles_csv}")
 
     # --- 3) Circle clusters
-    cc = cluster_circles(circles, eps_m=circle_eps_m, min_samples=circle_min_samples)    # enforce canonical order for circle_clusters_enriched.csv
+    cc = cluster_circles(circles, eps_m=circle_eps_m, min_samples=circle_min_samples)
+    # enforce canonical order for circle_clusters_enriched.csv
     cc_cols = [
         "cluster_id", "lat", "lon", "t_start", "t_end",
         "climb_rate_ms", "climb_rate_ms_median", "alt_gain_m_mean", "duration_s_mean",
@@ -534,8 +570,11 @@ def main() -> int:
     logf_write(logf, f"[OK] wrote {len(cc)} circle clusters → {cc_csv}")
 
     # --- 4) Altitude clusters
-    alts = detect_altitude_clusters(track, min_gain_m=alt_min_gain, min_duration_s=alt_min_duration)
-
+    alts = detect_altitude_clusters(
+        track,
+        min_gain_m=alt_min_gain,
+        min_duration_s=alt_min_duration,
+    )
     # ensure cluster_id exists and enforce canonical order
     ALT_COLS = ["cluster_id", "lat", "lon", "t_start", "t_end",
                 "climb_rate_ms", "alt_gain_m", "duration_s"]
@@ -562,11 +601,10 @@ def main() -> int:
     # --- 5) Matching
     cc_for_match = cc.rename(columns={"cluster_id":"cluster_id"})  # already good
     matches, stats = match_clusters(
-        cc_for_match if not cc_for_match.empty else pd.DataFrame(
-            columns=["cluster_id", "lat", "lon", "t_start", "t_end"]),
+        cc if not cc.empty else pd.DataFrame(columns=["cluster_id", "lat", "lon", "t_start", "t_end"]),
         alts,
         max_dist_m=match_max_dist_m,
-        min_overlap_frac=match_min_overlap
+        min_overlap_frac=match_min_overlap,
     )
     parse_igc_brecords
     # enforce canonical order for matched_clusters.csv

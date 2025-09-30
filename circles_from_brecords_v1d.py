@@ -199,7 +199,7 @@ def detect_circles(df, min_duration_s=6.0, max_duration_s=60.0, min_radius_m=8.0
                 "t_end": float(t[i1]),
                 "duration_s": float(dur),
                 "avg_speed_kmh": float(v_mean*3.6) if np.isfinite(v_mean) else np.nan,
-                "alt_gained_m": float(alt_gain) if np.isfinite(alt_gain) else np.nan,
+                "alt_gain_m":  float(alt_gain) if np.isfinite(alt_gain) else np.nan,
                 "climb_rate_ms": float(climb) if np.isfinite(climb) else np.nan,
                 "turn_radius_m": float(radius) if np.isfinite(radius) else np.nan,
                 "bank_angle_deg": float(bank) if np.isfinite(bank) else np.nan,
@@ -218,7 +218,7 @@ def main():
     import argparse
     from pathlib import Path
     import shutil
-    import pandas as pd  # if your file already imports pandas at top, this is harmless
+    import pandas as pd
 
     ap = argparse.ArgumentParser()
     ap.add_argument("igc", nargs="?", help="Path to IGC file")
@@ -238,78 +238,45 @@ def main():
     if not igc_path.exists():
         raise FileNotFoundError(igc_path)
 
-    # Compute per-flight run directory under outputs/batch_csv/<flight_basename>
-    # (strip trailing ')' if present, and collapse whitespace)
+    # Per-flight run directory under outputs/batch_csv/<flight_basename>
     flight = igc_path.stem.rstrip(')').strip()
     run_dir = out_root / flight
     run_dir.mkdir(parents=True, exist_ok=True)
 
-    # Copy the source IGC into the run_dir (overwrite if it exists)
+    # Copy the source IGC into the run_dir (overwrite if different file)
     igc_local = run_dir / igc_path.name
     try:
         shutil.copy2(igc_path, igc_local)
     except Exception:
-        # If source and dest are the same file, ignore
         if igc_path.resolve() != igc_local.resolve():
             raise
 
-    # Parse B-records and write circles.csv in the run_dir
-    df = parse_igc_brecords(igc_local)
-    out_csv = run_dir / "circles.csv"
-    # ----- STANDARDIZE SCHEMA & ORDER (CIRCLES) -----
-    d = df.reset_index(drop=True).copy()
+    # --- Parse track and DETECT CIRCLES ---
+    track_df   = parse_igc_brecords(igc_local)
+    circles_df = detect_circles(track_df)  # <-- use the detector’s output
 
-    # Map common variants -> canonical names
-    ren = {}
-    for cand in ["lat", "lat_mean", "center_lat", "circle_lat"]:
-        if cand in d.columns and cand != "lat":
-            ren[cand] = "lat";
-            break
-    for cand in ["lon", "lon_mean", "center_lon", "circle_lon"]:
-        if cand in d.columns and cand != "lon":
-            ren[cand] = "lon";
-            break
+    # --- Normalize names (tolerate legacy runs) ---
+    d = circles_df.reset_index(drop=True).copy()
+    if "alt_gained_m" in d.columns and "alt_gain_m" not in d.columns:
+        d = d.rename(columns={"alt_gained_m": "alt_gain_m"})
 
-    for cand in ["t_start", "start_s", "t0", "time_start_s", "start"]:
-        if cand in d.columns and cand != "t_start":
-            ren[cand] = "t_start";
-            break
-    for cand in ["t_end", "end_s", "t1", "time_end_s", "end"]:
-        if cand in d.columns and cand != "t_end":
-            ren[cand] = "t_end";
-            break
-
-    # Promote common aggregates
-    if "alt_gain_m_mean" in d.columns and "alt_gain_m" not in d.columns:
-        ren["alt_gain_m_mean"] = "alt_gain_m"
-    if "duration_s_mean" in d.columns and "duration_s" not in d.columns:
-        ren["duration_s_mean"] = "duration_s"
-    if "climb_rate_ms_mean" in d.columns and "climb_rate_ms" not in d.columns:
-        ren["climb_rate_ms_mean"] = "climb_rate_ms"
-
-    if ren:
-        d = d.rename(columns=ren)
-
-    # Synthesize missing metrics when possible
+    # Derive duration if needed
     if "duration_s" not in d.columns and {"t_start", "t_end"} <= set(d.columns):
         d["duration_s"] = d["t_end"] - d["t_start"]
 
-    if "alt_gain_m" not in d.columns and {"alt_start_m", "alt_end_m"} <= set(d.columns):
-        d["alt_gain_m"] = d["alt_end_m"] - d["alt_start_m"]
-
+    # Derive climb if possible
     if "climb_rate_ms" not in d.columns and {"alt_gain_m", "duration_s"} <= set(d.columns):
         d["climb_rate_ms"] = d["alt_gain_m"] / d["duration_s"].replace(0, pd.NA)
 
-    # Canonical order + extras
-    canon = ["lat", "lon", "climb_rate_ms", "alt_gain_m", "duration_s", "t_start", "t_end"]
-    extras = [c for c in d.columns if c not in canon]
-    d = d[[c for c in canon if c in d.columns] + extras]
+    # Canonical order you requested
+    canonical = ["lat", "lon", "t_start", "t_end", "climb_rate_ms", "alt_gain_m", "duration_s"]
+    extras = [c for c in d.columns if c not in canonical]
+    d = d[[c for c in canonical if c in d.columns] + extras]
 
-    # Write
+    # Write circles.csv in run_dir
+    out_csv = run_dir / "circles.csv"
     d.to_csv(out_csv, index=False)
     print(f"[OK] wrote {len(d)} circles → {out_csv}")
-
-    #print(f"[OK] wrote {len(df)} circles → {out_csv}")
     return 0
 
 if __name__ == "__main__":

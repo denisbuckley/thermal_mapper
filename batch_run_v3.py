@@ -1,112 +1,155 @@
 #!/usr/bin/env python3
+# -*- coding: utf-8 -*-
 """
-Batch runner for pipeline_v3.py
+batch_run_v4.py — MONOLITHIC BATCH
 
-- Scans an IGC directory (default: ./igc) for *.igc
-- For each flight, runs pipeline_v3.py into outputs/batch_csv/<flight_basename>/
-- Skips flights that already have matched_clusters.csv unless --force
-- Writes a master log at outputs/batch_csv/_batch_debug.log
+Flow for ALL IGCs in a folder:
+  For each *.igc file:
+    1) Parse IGC B-records → track DataFrame
+    2) Detect circling segments → circles.csv
+    3) Cluster circles → circle_clusters_enriched.csv
+    4) Detect altitude-only climb segments → altitude_clusters.csv
+    5) Match circle clusters ↔ altitude clusters → matched_clusters.csv + .json
+
+Inputs:
+  ./igc/<*.igc>  (or another folder you specify when prompted)
+
+Outputs:
+  ./outputs/batch_csv/<flight_stem>/
+    circles.csv
+    circle_clusters_enriched.csv
+    altitude_clusters.csv
+    matched_clusters.csv
+    matched_clusters.json
+    pipeline_debug.log
 """
 
-import sys, shlex, subprocess
+import argparse, sys
 from pathlib import Path
-from datetime import datetime
 
-ROOT = Path(__file__).resolve().parent
-PIPE = ROOT / "pipeline_v3.py"
-OUT_ROOT = ROOT / "outputs" / "batch_csv"
+# import everything from your pipeline (reuse helpers + funcs)
+from pipeline_v4 import (
+    IGC_DIR, OUT_ROOT, logf_write, wipe_run_dir,
+    parse_igc_brecords, detect_circles, cluster_circles, detect_altitude_clusters, match_clusters
+)
 
-def safe_basename(p: Path) -> str:
-    name = p.stem.strip()
-    for ch in '\\/:*?"<>|':
-        name = name.replace(ch, " ")
-    return " ".join(name.split())
+import pandas as pd
+import json
 
-def run_cmd(cmd, cwd: Path, logf):
-    if isinstance(cmd, str):
-        cmd_list = shlex.split(cmd)
+def process_igc(igc_path: Path, args) -> None:
+    flight = igc_path.stem
+    run_dir = OUT_ROOT / flight
+    wipe_run_dir(run_dir)
+    logf = run_dir / "pipeline_debug.log"
+    logf_write(logf, f"===== pipeline_v4 batch start =====")
+    logf_write(logf, f"IGC: {igc_path}")
+    logf_write(logf, f"RUN_DIR: {run_dir}")
+
+    # --- 1) Track
+    track = parse_igc_brecords(igc_path)
+    if track.empty:
+        logf_write(logf, "[WARN] No B-records parsed; skipping.")
+        return
+
+    # --- 2) Circles
+    circles = detect_circles(track)
+    circles_cols = ["lat","lon","t_start","t_end","climb_rate_ms","alt_gain_m","duration_s"]
+    if not circles.empty:
+        for c in circles_cols:
+            if c not in circles.columns:
+                circles[c] = pd.NA
+        extras = [c for c in circles.columns if c not in circles_cols]
+        circles = circles[circles_cols + extras]
     else:
-        cmd_list = cmd
-    logf.write(f"[RUN] (cwd={cwd}) {' '.join(shlex.quote(x) for x in cmd_list)}\n"); logf.flush()
-    proc = subprocess.run(cmd_list, cwd=str(cwd), text=True,
-                          stdout=subprocess.PIPE, stderr=subprocess.STDOUT)
-    logf.write(proc.stdout)
-    logf.write(f"[RC] {proc.returncode}\n\n"); logf.flush()
-    return proc.returncode
+        circles = pd.DataFrame(columns=circles_cols)
+    circles_csv = run_dir / "circles.csv"
+    circles.to_csv(circles_csv, index=False)
+    logf_write(logf, f"[OK] wrote {len(circles)} circles → {circles_csv}")
+
+    # --- 3) Circle clusters
+    cc = cluster_circles(circles, eps_m=args.circle_eps_m, min_samples=args.circle_min_samples)
+    cc_cols = [
+        "cluster_id","lat","lon","t_start","t_end",
+        "climb_rate_ms","climb_rate_ms_median","alt_gain_m_mean","duration_s_mean","n_circles"
+    ]
+    if not cc.empty:
+        for k in cc_cols:
+            if k not in cc.columns:
+                cc[k] = pd.NA
+        cc = cc[cc_cols]
+    else:
+        cc = pd.DataFrame(columns=cc_cols)
+    cc_csv = run_dir / "circle_clusters_enriched.csv"
+    cc.to_csv(cc_csv, index=False)
+    logf_write(logf, f"[OK] wrote {len(cc)} circle clusters → {cc_csv}")
+
+    # --- 4) Altitude clusters
+    alts = detect_altitude_clusters(track, min_gain_m=args.alt_min_gain, min_duration_s=args.alt_min_duration)
+    ALT_COLS = ["cluster_id","lat","lon","t_start","t_end","climb_rate_ms","alt_gain_m","duration_s"]
+    if alts.empty:
+        alts = pd.DataFrame(columns=ALT_COLS)
+    else:
+        if "cluster_id" not in alts.columns:
+            alts = alts.reset_index(drop=True)
+            alts["cluster_id"] = alts.index
+        for k in ALT_COLS:
+            if k not in alts.columns:
+                alts[k] = pd.NA
+        alts = alts[ALT_COLS]
+    alt_csv = run_dir / "altitude_clusters.csv"
+    alts.to_csv(alt_csv, index=False)
+    logf_write(logf, f"[OK] wrote {len(alts)} altitude clusters → {alt_csv}")
+
+    # --- 5) Matching
+    matches, stats = match_clusters(cc, alts,
+        max_dist_m=args.match_max_dist_m,
+        min_overlap_frac=args.match_min_overlap
+    )
+    match_cols = [
+        "lat","lon","climb_rate_ms","alt_gain_m","duration_s",
+        "circle_cluster_id","alt_cluster_id",
+        "circle_lat","circle_lon","alt_lat","alt_lon",
+        "dist_m","time_overlap_s","overlap_frac"
+    ]
+    if not matches.empty:
+        matches = matches.reindex(columns=match_cols)
+    else:
+        matches = pd.DataFrame(columns=match_cols)
+    match_csv = run_dir / "matched_clusters.csv"
+    matches.to_csv(match_csv, index=False)
+
+    match_json = run_dir / "matched_clusters.json"
+    payload = {"stats": stats, "rows": int(len(matches))}
+    match_json.write_text(json.dumps(payload, indent=2), encoding="utf-8")
+    logf_write(logf, f"[OK] wrote {len(matches)} matches → {match_csv}")
+    logf_write(logf, "[DONE]")
 
 def main():
-    import argparse
-
     ap = argparse.ArgumentParser()
-    ap.add_argument("--igc-dir", default="igc", help="Folder containing .igc files (default: igc)")
-    ap.add_argument("--out-root", default=str(OUT_ROOT), help="Batch outputs root (default: outputs/batch_csv)")
-    ap.add_argument("--resume-from", default=None, help="Substring; skip until a filename contains this")
-    ap.add_argument("--limit", type=int, default=0, help="Stop after N flights (0 = no limit)")
-    ap.add_argument("--force", action="store_true", help="Re-run even if matched_clusters.csv exists")
-    ap.add_argument("--dry-run", action="store_true", help="List what would run, don’t execute")
+    ap.add_argument("--igc-dir", type=str, default="igc", help="Folder containing .igc files")
+    ap.add_argument("--circle-eps-m", type=float, default=200.0)
+    ap.add_argument("--circle-min-samples", type=int, default=2)
+    ap.add_argument("--alt-min-gain", type=float, default=30.0)
+    ap.add_argument("--alt-min-duration", type=float, default=20.0)
+    ap.add_argument("--match-max-dist-m", type=float, default=600.0)
+    ap.add_argument("--match-min-overlap", type=float, default=0.25)
     args = ap.parse_args()
 
     igc_dir = Path(args.igc_dir)
-    out_root = Path(args.out_root)
-    out_root.mkdir(parents=True, exist_ok=True)
-
     if not igc_dir.exists():
-        print(f"[ERROR] IGC dir not found: {igc_dir}")
-        return 2
+        user_in = input(f"Enter folder path with IGC files [default {igc_dir}]: ").strip()
+        igc_dir = Path(user_in) if user_in else igc_dir
 
-    flights = sorted(igc_dir.glob("*.igc"))
-    if not flights:
-        print(f"[INFO] No .igc files in {igc_dir}")
-        return 0
+    igc_files = sorted(igc_dir.glob("*.igc"))
+    if not igc_files:
+        print(f"[ERROR] No .igc files found in {igc_dir}")
+        return 1
 
-    batch_log = out_root / "_batch_debug.log"
-    with open(batch_log, "a", encoding="utf-8") as logf:
-        logf.write(f"===== batch_run_v3 start {datetime.now().isoformat()} =====\n")
-        logf.write(f"IGC_DIR: {igc_dir}\nOUT_ROOT: {out_root}\n\n")
+    for igc in igc_files:
+        print(f"[INFO] Processing {igc.name}")
+        process_igc(igc, args)
 
-        started = args.resume_from is None
-        ran = 0
-        errs = 0
-
-        for igc in flights:
-            fn = igc.name
-            if not started:
-                if args.resume_from and args.resume_from in fn:
-                    started = True
-                else:
-                    logf.write(f"[SKIP-resume] {fn}\n")
-                    continue
-
-            flight = safe_basename(igc)
-            run_dir = out_root / flight
-            done_csv = run_dir / "matched_clusters.csv"
-
-            if done_csv.exists() and not args.force:
-                logf.write(f"[SKIP] already has matched_clusters.csv → {run_dir}\n")
-                continue
-
-            cmd = [sys.executable, str(PIPE), str(igc)]
-            if args.dry_run:
-                print(f"[DRY] would run: {' '.join(shlex.quote(x) for x in cmd)}")
-                continue
-
-            rc = run_cmd(cmd, cwd=ROOT, logf=logf)
-            if rc != 0:
-                errs += 1
-                logf.write(f"[WARN] pipeline failed for {fn} (rc={rc})\n")
-            else:
-                ran += 1
-                logf.write(f"[OK] pipeline completed for {fn}\n")
-
-            if args.limit and ran >= args.limit:
-                logf.write(f"[STOP] reached limit={args.limit}\n")
-                break
-
-        logf.write(f"\n===== batch_run_v3 done {datetime.now().isoformat()} =====\n")
-        logf.write(f"Summary: total={len(flights)} ran={ran} errs={errs} skipped={len(flights)-ran-errs}\n\n")
-
-    print("[DONE] batch complete")
-    print(" Log:", batch_log)
+    print(f"[DONE] Processed {len(igc_files)} flights from {igc_dir}")
     return 0
 
 if __name__ == "__main__":

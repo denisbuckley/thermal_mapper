@@ -73,33 +73,39 @@ def main():
 
     ap = argparse.ArgumentParser()
     ap.add_argument("igc", nargs="?", help="Path to IGC file")
-    ap.add_argument("--out", help="Output CSV", default=None)
+    ap.add_argument("--out", help="Override output CSV path")
     args = ap.parse_args()
 
-    # Defaults
+    # Resolve IGC path (arg or prompt with sensible default)
     default_igc = Path("igc/2020-11-08 Lumpy Paterson 108645.igc")
-    default_out = Path("outputs/altitude_clusters.csv")
-
-    # IGC input
-    if args.igc:
-        igc_path = Path(args.igc)
-    else:
-        user_in = input(f"Enter path to IGC file [default: {default_igc}]: ").strip()
-        igc_path = Path(user_in) if user_in else default_igc
-
+    igc_path = Path(args.igc) if args.igc else Path(
+        input(f"Enter IGC file path [default: {default_igc}]: ").strip() or default_igc
+    )
     if not igc_path.exists():
         raise FileNotFoundError(igc_path)
 
-    # === altitude clustering logic ===
-    df = parse_igc_brecords(igc_path)
-    clusters = detect_altitude_clusters(df)
+    # Per-flight run directory: outputs/batch_csv/<flight>
+    flight = igc_path.stem.rstrip(')').strip()
+    run_dir = Path("outputs") / "batch_csv" / flight
+    run_dir.mkdir(parents=True, exist_ok=True)
 
-    # Output
-    out_path = Path(args.out) if args.out else default_out
-    out_path.parent.mkdir(parents=True, exist_ok=True)
+    # Build altitude clusters
+    track = parse_igc_brecords(igc_path)
+    clusters = detect_altitude_clusters(track)
 
+    # Give each cluster an ID and standardize column order
+    clusters = clusters.reset_index(drop=True)
+    clusters["cluster_id"] = clusters.index
+    canonical = ["cluster_id", "t_start", "t_end", "lat", "lon",
+                 "climb_rate_ms", "alt_gain_m", "duration_s"]
+    extras = [c for c in clusters.columns if c not in canonical]
+    clusters = clusters[[c for c in canonical if c in clusters.columns] + extras]
+
+    # Output path: per-flight folder unless overridden
+    out_path = Path(args.out) if args.out else (run_dir / "altitude_clusters.csv")
     clusters.to_csv(out_path, index=False)
-    print(f"[OK] wrote {len(clusters)} clusters → {out_path}")
+    print(f"[OK] wrote {len(clusters)} altitude clusters → {out_path}")
     return 0
+
 if __name__ == "__main__":
     main()

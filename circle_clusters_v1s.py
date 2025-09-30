@@ -57,14 +57,14 @@ def cluster_circles(df, dist_thresh=200.0, time_gap=300.0):
         circles = pd.DataFrame(c["circles"])
         dur_min = circles["duration_s"].sum() / 60.0
         turns_sum = circles["n_turns"].sum() if "n_turns" in circles else circles["duration_s"].sum()/30.0
-        alt_gain = circles["alt_gained_m"].sum()
+        alt_gain = circles["alt_gain_m"].sum()
         climb = (alt_gain / (circles["duration_s"].sum())) if circles["duration_s"].sum() > 0 else np.nan
         enriched.append({
             "cluster_id": c["cluster_id"],
             "n_circles": len(circles),
             "n_turns_sum": turns_sum,
             "duration_min": dur_min,
-            "alt_gained_m": alt_gain,
+            "alt_gain_m": alt_gain,
             "av_climb_ms": climb,
             "lat": circles["lat"].mean(),
             "lon": circles["lon"].mean(),
@@ -76,33 +76,71 @@ def cluster_circles(df, dist_thresh=200.0, time_gap=300.0):
 def main():
     import argparse
     from pathlib import Path
-    import os
 
     ap = argparse.ArgumentParser()
     ap.add_argument("circles", nargs="?", help="Path to circles.csv")
-    ap.add_argument("--out", help="Path to output enriched clusters CSV")
+    ap.add_argument("--out", help="Output CSV (default: circle_clusters_enriched.csv in same folder)")
     args = ap.parse_args()
 
-    # Default file if nothing passed
-    default_circles = Path("outputs/circles.csv")
-    default_out = Path("outputs/circle_clusters_enriched.csv")
-
+    # Prompt if no input path provided
     if args.circles:
         circles_path = Path(args.circles)
     else:
-        user_in = input(f"Enter path to circles.csv [default: {default_circles}]: ").strip()
-        circles_path = Path(user_in) if user_in else default_circles
+        inp = input("Enter path to circles.csv (required): ").strip()
+        if not inp:
+            raise SystemExit("[ERROR] circles.csv path is required")
+        circles_path = Path(inp)
 
     if not circles_path.exists():
-        print(f"[ERROR] Missing input: {circles_path}")
-        return
+        raise FileNotFoundError(circles_path)
 
-    out_path = Path(args.out) if args.out else default_out
+    # Default out: same folder as input
+    out_path = Path(args.out) if args.out else circles_path.parent / "circle_clusters_enriched.csv"
+    out_path.parent.mkdir(parents=True, exist_ok=True)
 
-    # === existing cluster logic ===
-    df = pd.read_csv(circles_path)
-    clusters = cluster_circles(df)   # your existing function
+    # Load, process, save
+    circles = pd.read_csv(circles_path)
+
+    # --- normalize altitude-gain to canonical: alt_gain_m ---
+    gain_variants = ["alt_gain_m", "alt_gain_m", "alt_gain", "altitude_gain_m"]
+    for g in gain_variants:
+        if g in circles.columns:
+            if g != "alt_gain_m":
+                circles = circles.rename(columns={g: "alt_gain_m"})
+            break
+    else:
+        cols = set(circles.columns)
+        if {"alt_start_m", "alt_end_m"} <= cols:
+            circles["alt_gain_m"] = circles["alt_end_m"] - circles["alt_start_m"]
+        elif {"climb_rate_ms", "duration_s"} <= cols:
+            circles["alt_gain_m"] = circles["climb_rate_ms"] * circles["duration_s"]
+        else:
+            raise KeyError(
+                "No altitude-gain column and cannot derive one. "
+                "Expected alt_gain_m (or alt_gain_m/alt_gain/altitude_gain_m), "
+                "or derive from alt_start_m+alt_end_m or climb_rate_ms*duration_s."
+            )
+    clusters = cluster_circles(circles)
+
+    # === PATCH: canonical order for circle_clusters_enriched.csv ===
+    need = [
+        "cluster_id", "lat", "lon", "t_start", "t_end",
+        "climb_rate_ms", "climb_rate_ms_median", "alt_gain_m_mean", "duration_s_mean",
+        "n_circles",
+    ]
+    for c in need:
+        if c not in clusters.columns:
+            clusters[c] = pd.NA
+    clusters = clusters[need]
+    # === END PATCH ===
+
     clusters.to_csv(out_path, index=False)
-    print(f"[OK] wrote {out_path}")
+    print(f"[OK] wrote {len(clusters)} clusters → {out_path}")
+    return 0
+
+
+if __name__ == "__main__":
+    raise SystemExit(main())
+
 if __name__ == "__main__":
     main()

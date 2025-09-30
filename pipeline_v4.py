@@ -484,7 +484,7 @@ def main() -> int:
     # --- 2) Circles
     circles = detect_circles(track)
     # enforce canonical order for circles.csv
-    circles_cols = ["t_start","t_end","duration_s","lat","lon","alt_gain_m","climb_rate_ms"]
+    circles_cols = ["lat","lon","t_start","t_end","climb_rate_ms", "alt_gain_m","duration_s"]
     if not circles.empty:
         circles = circles.reindex(columns=[c for c in circles_cols if c in circles.columns])
     else:
@@ -498,11 +498,17 @@ def main() -> int:
     cc = cluster_circles(circles, eps_m=args.circle_eps_m, min_samples=args.circle_min_samples)
     # enforce canonical order for circle_clusters_enriched.csv
     cc_cols = [
-        "cluster_id","lat","lon","t_start","t_end","n_circles",
-        "climb_rate_ms","climb_rate_ms_median","alt_gain_m_mean","duration_s_mean"
+        "cluster_id", "lat", "lon", "t_start", "t_end",
+        "climb_rate_ms", "climb_rate_ms_median", "alt_gain_m_mean", "duration_s_mean",
+        "n_circles"
     ]
+
     if not cc.empty:
-        cc = cc.reindex(columns=[c for c in cc_cols if c in cc.columns])
+        # ensure any missing canonical columns exist
+        for k in cc_cols:
+            if k not in cc.columns:
+                cc[k] = pd.NA
+        cc = cc[cc_cols]
     else:
         cc = pd.DataFrame(columns=cc_cols)
 
@@ -511,17 +517,34 @@ def main() -> int:
     logf_write(logf, f"[OK] wrote {len(cc)} circle clusters → {cc_csv}")
 
     # --- 4) Altitude clusters
-    alts = detect_altitude_clusters(track, min_gain_m=args.alt_min_gain, min_duration_s=args.alt_min_duration)
-    # enforce canonical order for altitude_clusters.csv
-    alt_cols = ["t_start","t_end","duration_s","alt_gain_m","climb_rate_ms","lat","lon"]
-    if not alts.empty:
-        alts = alts.reindex(columns=alt_cols)
+    alts = detect_altitude_clusters(
+        track,
+        min_gain_m=args.alt_min_gain,
+        min_duration_s=args.alt_min_duration,
+    )
+
+    # ensure cluster_id exists and enforce canonical order
+    ALT_COLS = ["cluster_id", "lat", "lon", "t_start", "t_end",
+                "climb_rate_ms", "alt_gain_m", "duration_s"]
+
+    if alts.empty:
+        alts = pd.DataFrame(columns=ALT_COLS)
     else:
-        alts = pd.DataFrame(columns=alt_cols)
+        # synthesize cluster_id if missing
+        if "cluster_id" not in alts.columns:
+            alts = alts.reset_index(drop=True)
+            alts["cluster_id"] = alts.index
+
+        # guarantee presence + order
+        for k in ALT_COLS:
+            if k not in alts.columns:
+                alts[k] = pd.NA
+        alts = alts[ALT_COLS]
 
     alt_csv = run_dir / "altitude_clusters.csv"
     alts.to_csv(alt_csv, index=False)
     logf_write(logf, f"[OK] wrote {len(alts)} altitude clusters → {alt_csv}")
+
 
     # --- 5) Matching
     cc_for_match = cc.rename(columns={"cluster_id":"cluster_id"})  # already good
@@ -532,8 +555,12 @@ def main() -> int:
         min_overlap_frac=args.match_min_overlap
     )
     # enforce canonical order for matched_clusters.csv
-    match_cols = ["circle_cluster_id","alt_cluster_id","dist_m","time_overlap_s","overlap_frac",
-                  "circle_lat","circle_lon","alt_lat","alt_lon","lat","lon","alt_gain_m","duration_s","climb_rate_ms"]
+    match_cols = [
+        "lat", "lon", "climb_rate_ms", "alt_gain_m", "duration_s",
+        "circle_cluster_id", "alt_cluster_id",
+        "circle_lat", "circle_lon", "alt_lat", "alt_lon",
+        "dist_m", "time_overlap_s", "overlap_frac"
+    ]
     if not matches.empty:
         matches = matches.reindex(columns=match_cols)
     else:

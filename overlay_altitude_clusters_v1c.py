@@ -21,7 +21,7 @@ LOG_PATH = os.path.join(DEBUG_DIR, "overlay_altitude_clusters_debug.log")
 logging.basicConfig(filename=LOG_PATH, level=logging.DEBUG, format="%(asctime)s %(levelname)s %(message)s")
 logger = logging.getLogger(__name__)
 
-DEFAULT_IGC = "2020-11-08 Lumpy Paterson 108645.igc"
+DEFAULT_IGC = "2020-11-08 Lumpy Paterson 108645.igc_subset"
 
 def parse_igc(path: str) -> pd.DataFrame:
     times, lats, lons, alts = [], [], [], []
@@ -100,7 +100,7 @@ def detect_altitude_clusters(df: pd.DataFrame) -> pd.DataFrame:
 
 def main():
     ap = argparse.ArgumentParser(description="Altitude-based cluster detection with enriched output schema")
-    ap.add_argument("igc", nargs="?", help="Path to IGC file")
+    ap.add_argument("igc_subset", nargs="?", help="Path to IGC file")
     ap.add_argument("--clusters-csv", default=os.path.join(OUTPUT_DIR, "overlay_altitude_clusters.csv"))
     args = ap.parse_args()
 

@@ -7,6 +7,7 @@ import numpy as np
 import pandas as pd
 import sys
 from pathlib import Path
+
 # ------------------- IGC PARSER -------------------
 def parse_igc_brecords(path):
     times, lats, lons, p_alts, g_alts = [], [], [], [], []
@@ -122,7 +123,7 @@ def detect_circles(df, min_duration_s=6.0, max_duration_s=60.0, min_radius_m=8.0
     if n < 3:
         return pd.DataFrame(columns=[
             "circle_id","seg_id","t_start","t_end","duration_s",
-            "avg_speed_kmh","alt_gained_m","climb_rate_ms",
+            "avg_speed_kmh","alt_gain_m","climb_rate_ms",
             "turn_radius_m","bank_angle_deg","lat","lon"
         ])
 
@@ -213,12 +214,91 @@ def detect_circles(df, min_duration_s=6.0, max_duration_s=60.0, min_radius_m=8.0
 
     return pd.DataFrame(circles)
 
+def detect_tow_end(track,
+                   H_ft=2700.0,      # Height gate (ft)
+                   T_s=180.0,        # Time gate (s)
+                   D_ft=100.0,       # Descent gate (ft)
+                   steady_s=60.0):   # Minimum steady-climb window before enabling descent gate
+    """
+    Return index of last tow sample (inclusive). You should slice track.iloc[tow_idx+1:] for free flight.
+
+    Logic:
+      - H: when altitude gain from launch >= H_ft → end tow.
+      - T: when elapsed time >= T_s → end tow.
+      - D: once an initial steady climb of >= steady_s is present, end tow at the
+           first point where altitude drops by >= D_ft from the running post-release peak.
+
+    Chooses the earliest tow end among satisfied gates.
+    """
+    if track.empty:
+        return -1
+
+    # --- use existing altitude column from this script ---
+    alt_col = "alt_smooth" if "alt_smooth" in track.columns else (
+        "alt_raw" if "alt_raw" in track.columns else (
+            "alt_gps" if "alt_gps" in track.columns else "alt_pressure"
+        )
+    )
+
+    FT_TO_M = 0.3048
+    H_m = H_ft * FT_TO_M
+    D_m = D_ft * FT_TO_M
+
+    t = track["time_s"].to_numpy()
+    alt = track[alt_col].to_numpy()
+
+    t0 = float(t[0])
+    a0 = float(alt[0])
+
+    # --- Gate H: altitude rise from launch
+    tow_idx_H = None
+    for i in range(len(alt)):
+        if alt[i] - a0 >= H_m:
+            tow_idx_H = i
+            break
+
+    # --- Gate T: elapsed time since launch
+    tow_idx_T = None
+    for i in range(len(t)):
+        if (t[i] - t0) >= T_s:
+            tow_idx_T = i
+            break
+
+    # --- Gate D: after steady climb, first drop of >= D_m from running peak
+    tow_idx_D = None
+    climb_start_i = None
+    for i in range(1, len(alt)):
+        dalt = alt[i] - alt[i-1]
+        if dalt > 0:
+            if climb_start_i is None:
+                climb_start_i = i-1
+        else:
+            # reset if not climbing
+            climb_start_i = None
+
+        # Once we have steady_s of continuous climb, enable descent trigger
+        if climb_start_i is not None and (t[i] - t[climb_start_i]) >= steady_s:
+            run_peak = alt[i]
+            for j in range(i+1, len(alt)):
+                if alt[j] > run_peak:
+                    run_peak = alt[j]
+                if run_peak - alt[j] >= D_m:
+                    tow_idx_D = j
+                    break
+            break  # after enabling, we either found the drop or not
+
+    # Pick the earliest tow end among ones that fired
+    candidates = [idx for idx in (tow_idx_H, tow_idx_T, tow_idx_D) if idx is not None]
+    if not candidates:
+        return -1
+    return min(candidates)
+
 # ------------------- MAIN -------------------
 def main():
     import argparse
     from pathlib import Path
     import shutil
-    import pandas as pd
+    import pandas as pd  # harmless reimport if already imported
 
     ap = argparse.ArgumentParser()
     ap.add_argument("igc", nargs="?", help="Path to IGC file")
@@ -226,7 +306,7 @@ def main():
 
     # Defaults
     default_igc = Path("igc/2020-11-08 Lumpy Paterson 108645.igc")
-    out_root = Path("outputs/batch_csv")
+    out_root = Path("outputs/waypoints/batch_csv")
 
     # Resolve IGC path (arg or prompt)
     if args.igc:
@@ -253,6 +333,17 @@ def main():
 
     # --- Parse track and DETECT CIRCLES ---
     track_df   = parse_igc_brecords(igc_local)
+
+    # --- cut off aerotow segment ---
+    tow_end_idx = detect_tow_end(track_df,
+                                 H_ft=2700.0,
+                                 T_s=180.0,
+                                 D_ft=100.0,
+                                 steady_s=60.0)
+    if tow_end_idx >= 0 and tow_end_idx < len(track_df) - 1:
+        track_df = track_df.iloc[tow_end_idx + 1:].reset_index(drop=True)
+        print(f"[INFO] Tow cut at idx={tow_end_idx}, samples left={len(track_df)}")
+
     circles_df = detect_circles(track_df)  # <-- use the detector’s output
 
     # --- Normalize names (tolerate legacy runs) ---
@@ -281,5 +372,3 @@ def main():
 
 if __name__ == "__main__":
     raise SystemExit(main())
-if __name__ == "__main__":
-    main()

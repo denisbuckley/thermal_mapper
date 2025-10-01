@@ -110,7 +110,10 @@ def unwrap_angles(angs):
     return np.array(out, dtype=float)
 
 # ------------------- CIRCLE DETECTOR -------------------
-def detect_circles(df, min_duration_s=6.0, max_duration_s=60.0, min_radius_m=8.0, max_radius_m=600.0, min_bank_deg=5.0, vmax_climb_ms=10.0):
+def detect_circles(df,
+                   min_duration_s=6.0, max_duration_s=60.0,
+                   min_radius_m=8.0, max_radius_m=600.0,
+                   min_bank_deg=5.0, vmax_climb_ms=10.0):
     """Detect circles via cumulative heading rotation across B-fix bearings.
     Enforce duration/radius/bank sanity to reject long arcs and shallow meanders.
     """
@@ -306,7 +309,7 @@ def main():
 
     # Defaults
     default_igc = Path("igc/2020-11-08 Lumpy Paterson 108645.igc")
-    out_root = Path("outputs/waypoints/batch_csv")
+    out_root = Path("outputs/batch_csv")
 
     # Resolve IGC path (arg or prompt)
     if args.igc:
@@ -332,7 +335,7 @@ def main():
             raise
 
     # --- Parse track and DETECT CIRCLES ---
-    track_df   = parse_igc_brecords(igc_local)
+    track_df = parse_igc_brecords(igc_local)
 
     # --- cut off aerotow segment ---
     tow_end_idx = detect_tow_end(track_df,
@@ -344,7 +347,7 @@ def main():
         track_df = track_df.iloc[tow_end_idx + 1:].reset_index(drop=True)
         print(f"[INFO] Tow cut at idx={tow_end_idx}, samples left={len(track_df)}")
 
-    circles_df = detect_circles(track_df)  # <-- use the detector’s output
+    circles_df = detect_circles(track_df)
 
     # --- Normalize names (tolerate legacy runs) ---
     d = circles_df.reset_index(drop=True).copy()
@@ -359,8 +362,15 @@ def main():
     if "climb_rate_ms" not in d.columns and {"alt_gain_m", "duration_s"} <= set(d.columns):
         d["climb_rate_ms"] = d["alt_gain_m"] / d["duration_s"].replace(0, pd.NA)
 
+    # Add circle_diameter_m from radius
+    if "turn_radius_m" in d.columns and "circle_diameter_m" not in d.columns:
+        d["circle_diameter_m"] = d["turn_radius_m"] * 2.0
+
     # Canonical order you requested
-    canonical = ["lat", "lon", "t_start", "t_end", "climb_rate_ms", "alt_gain_m", "duration_s"]
+    canonical = [
+        "lat", "lon", "t_start", "t_end", "climb_rate_ms", "alt_gain_m", "duration_s",
+        "circle_id", "seg_id", "avg_speed_kmh", "turn_radius_m", "circle_diameter_m", "bank_angle_deg"
+    ]
     extras = [c for c in d.columns if c not in canonical]
     d = d[[c for c in canonical if c in d.columns] + extras]
 

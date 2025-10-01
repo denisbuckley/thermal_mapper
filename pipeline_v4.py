@@ -42,6 +42,21 @@ try:
 except Exception:
     _HAVE_SKLEARN = False
 
+# near the top with other imports
+try:
+    from tuning_v1 import (
+        circle_eps_m, circle_min_samples,
+        alt_min_gain, alt_min_duration,
+        match_max_dist_m, match_min_overlap,
+    )
+except Exception:
+    # fallbacks if tuning_v1.py is missing
+    circle_eps_m = 200.0
+    circle_min_samples = 2
+    alt_min_gain = 30.0
+    alt_min_duration = 20.0
+    match_max_dist_m = 600.0
+    match_min_overlap = 0.25
 
 # ---------------------------------------------------------------------------
 # Roots and helpers
@@ -441,13 +456,11 @@ def match_clusters(circle_clusters: pd.DataFrame,
 # ---------------------------------------------------------------------------
 def main() -> int:
     ap = argparse.ArgumentParser()
-    ap.add_argument("igc", nargs="?", help="Path to IGC file (absolute, or just the filename under ./igc)")
-    ap.add_argument("--circle-eps-m", type=float, default=200.0, help="DBSCAN eps (meters) for circle clustering")
-    ap.add_argument("--circle-min-samples", type=int, default=2, help="Min samples for circle DBSCAN")
-    ap.add_argument("--alt-min-gain", type=float, default=30.0, help="Altitude cluster min gain (m)")
-    ap.add_argument("--alt-min-duration", type=float, default=20.0, help="Altitude cluster min duration (s)")
-    ap.add_argument("--match-max-dist-m", type=float, default=600.0, help="Match max distance (m)")
-    ap.add_argument("--match-min-overlap", type=float, default=0.25, help="Match min overlap fraction [0..1]")
+    ap.add_argument(
+        "igc",
+        nargs="?",
+        help="Path to IGC file (absolute, or just the filename under ./igc)"
+    )
     args = ap.parse_args()
 
     # Resolve IGC path: CLI arg or prompt (no default)
@@ -474,6 +487,11 @@ def main() -> int:
     logf_write(logf, f"IGC: {igc_path}")
     logf_write(logf, f"RUN_DIR: {run_dir}")
 
+    # --- log tuning parameters here ---
+    logf_write(logf, f"TUNING: circle_eps_m={circle_eps_m}, circle_min_samples={circle_min_samples}, "
+                     f"alt_min_gain={alt_min_gain}, alt_min_duration={alt_min_duration}, "
+                     f"match_max_dist_m={match_max_dist_m}, match_min_overlap={match_min_overlap}")
+
     # --- 1) Track
     track = parse_igc_brecords(igc_path)
     if track.empty:
@@ -495,8 +513,7 @@ def main() -> int:
     logf_write(logf, f"[OK] wrote {len(circles)} circles → {circles_csv}")
 
     # --- 3) Circle clusters
-    cc = cluster_circles(circles, eps_m=args.circle_eps_m, min_samples=args.circle_min_samples)
-    # enforce canonical order for circle_clusters_enriched.csv
+    cc = cluster_circles(circles, eps_m=circle_eps_m, min_samples=circle_min_samples)    # enforce canonical order for circle_clusters_enriched.csv
     cc_cols = [
         "cluster_id", "lat", "lon", "t_start", "t_end",
         "climb_rate_ms", "climb_rate_ms_median", "alt_gain_m_mean", "duration_s_mean",
@@ -517,11 +534,7 @@ def main() -> int:
     logf_write(logf, f"[OK] wrote {len(cc)} circle clusters → {cc_csv}")
 
     # --- 4) Altitude clusters
-    alts = detect_altitude_clusters(
-        track,
-        min_gain_m=args.alt_min_gain,
-        min_duration_s=args.alt_min_duration,
-    )
+    alts = detect_altitude_clusters(track, min_gain_m=alt_min_gain, min_duration_s=alt_min_duration)
 
     # ensure cluster_id exists and enforce canonical order
     ALT_COLS = ["cluster_id", "lat", "lon", "t_start", "t_end",
@@ -549,11 +562,13 @@ def main() -> int:
     # --- 5) Matching
     cc_for_match = cc.rename(columns={"cluster_id":"cluster_id"})  # already good
     matches, stats = match_clusters(
-        cc_for_match if not cc_for_match.empty else pd.DataFrame(columns=["cluster_id","lat","lon","t_start","t_end"]),
+        cc_for_match if not cc_for_match.empty else pd.DataFrame(
+            columns=["cluster_id", "lat", "lon", "t_start", "t_end"]),
         alts,
-        max_dist_m=args.match_max_dist_m,
-        min_overlap_frac=args.match_min_overlap
+        max_dist_m=match_max_dist_m,
+        min_overlap_frac=match_min_overlap
     )
+    parse_igc_brecords
     # enforce canonical order for matched_clusters.csv
     match_cols = [
         "lat", "lon", "climb_rate_ms", "alt_gain_m", "duration_s",

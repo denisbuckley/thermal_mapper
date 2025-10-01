@@ -9,7 +9,7 @@ Processes all *.igc in a chosen folder, producing per-flight artifacts:
 Global batch progress is written to outputs/batch_debug.log
 
 Canonical orders:
-- circles.csv:                 lat,lon,t_start,t_end,climb_rate_ms,alt_gain_m,duration_s
+- circles.csv:                 lat,lon,t_start,t_end,climb_rate_ms,alt_gain_m,duration_s,circle_id,seg_id,avg_speed_kmh,turn_radius_m,circle_diameter_m,bank_angle_deg
 - circle_clusters_enriched.csv:cluster_id,lat,lon,t_start,t_end,climb_rate_ms,climb_rate_ms_median,alt_gain_m_mean,duration_s_mean,n_circles
 - altitude_clusters.csv:       cluster_id,lat,lon,t_start,t_end,climb_rate_ms,alt_gain_m,duration_s
 - matched_clusters.csv:        lat,lon,climb_rate_ms,alt_gain_m,duration_s,circle_cluster_id,alt_cluster_id,circle_lat,circle_lon,alt_lat,alt_lon,dist_m,time_overlap_s,overlap_frac
@@ -23,6 +23,7 @@ import time
 from pathlib import Path
 from typing import List, Optional, Tuple
 
+import numpy as np
 import pandas as pd
 
 # Optional scikit-learn for DBSCAN (used for circle clustering)
@@ -165,17 +166,10 @@ def detect_tow_end(track: pd.DataFrame,
                    steady_s: float = 60.0) -> int:
     """
     Return index of last tow sample (inclusive). Slice track.iloc[idx+1:] for free flight.
-
-    Gates:
-      H: altitude gain from launch >= H_ft
-      T: elapsed time since launch >= T_s
-      D: once steady climb of >= steady_s, first drop >= D_ft from running peak
-    Picks earliest satisfied gate.
     """
     if track.empty:
         return -1
 
-    # prefer 'alt' (this parser), else tolerate alt_smooth/raw/gps/pressure
     alt_col = "alt"
     for c in ("alt", "alt_smooth", "alt_raw", "alt_gps", "alt_pressure"):
         if c in track.columns:
@@ -229,54 +223,126 @@ def detect_tow_end(track: pd.DataFrame,
     return min(cand)
 
 # ---------------------------------------------------------------------------
-# 2) Circle detection
+# 2) Circle detection (enriched)
 # ---------------------------------------------------------------------------
 def detect_circles(df: pd.DataFrame,
-                   min_rotation_deg: float = 300.0,
-                   min_points: int = 12,
-                   min_duration_s: float = 15.0,
-                   max_duration_s: float = 180.0) -> pd.DataFrame:
+                   min_duration_s: float = 6.0,
+                   max_duration_s: float = 60.0,
+                   min_radius_m: float = 8.0,
+                   max_radius_m: float = 600.0,
+                   min_bank_deg: float = 5.0,
+                   vmax_climb_ms: float = 10.0) -> pd.DataFrame:
     """
-    Output columns: t_start, t_end, duration_s, lat, lon, alt_gain_m, climb_rate_ms
+    Detect circles via cumulative heading rotation across B-fix bearings.
+    Computes robust alt_gain (LS slope), climb, mean speed, turn radius,
+    circle diameter, and bank angle.
+
+    Returns columns:
+      circle_id, seg_id, t_start, t_end, duration_s,
+      avg_speed_kmh, alt_gain_m, climb_rate_ms,
+      turn_radius_m, circle_diameter_m, bank_angle_deg, lat, lon
     """
     n = len(df)
     if n < 3:
-        return pd.DataFrame(columns=["t_start","t_end","duration_s","lat","lon","alt_gain_m","climb_rate_ms"])
+        return pd.DataFrame(columns=[
+            "circle_id","seg_id","t_start","t_end","duration_s",
+            "avg_speed_kmh","alt_gain_m","climb_rate_ms",
+            "turn_radius_m","circle_diameter_m","bank_angle_deg","lat","lon"
+        ])
 
-    bearings = [bearing_deg(df.lat.iloc[i], df.lon.iloc[i], df.lat.iloc[i+1], df.lon.iloc[i+1]) for i in range(n-1)]
-    bu = unwrap_deg(bearings)
+    lat = df["lat"].to_numpy()
+    lon = df["lon"].to_numpy()
+    alt = df["alt"].to_numpy() if "alt" in df.columns else np.full(n, np.nan, dtype=float)
+    t   = df["time_s"].to_numpy()
 
-    out = []
-    i = 0
-    while i < n-2:
-        j = i + 1
-        cum = 0.0
-        while j < n-1:
-            dth = bu[j] - bu[j-1]
-            cum += dth
-            dur = float(df.time_s.iloc[j] - df.time_s.iloc[i])
-            if abs(cum) >= min_rotation_deg and (j - i + 1) >= min_points and dur >= min_duration_s:
-                while dur > max_duration_s and i < j-1:
-                    i += 1
-                    dur = float(df.time_s.iloc[j] - df.time_s.iloc[i])
-                seg = df.iloc[i:j+1]
-                alt_gain = float(seg.alt.iloc[-1] - seg.alt.iloc[0]) if "alt" in seg.columns else float("nan")
-                climb = alt_gain / dur if dur > 0 else float("nan")
-                out.append({
-                    "t_start": float(seg.time_s.iloc[0]),
-                    "t_end":   float(seg.time_s.iloc[-1]),
-                    "duration_s": dur,
-                    "lat": float(seg.lat.mean()),
-                    "lon": float(seg.lon.mean()),
-                    "alt_gain_m": alt_gain,
-                    "climb_rate_ms": climb,
-                })
-                i = j + 1
-                break
-            j += 1
-        else:
-            i += 1
-    return pd.DataFrame(out)
+    # cumulative headings
+    bearings = np.zeros(n)
+    for i in range(1, n):
+        bearings[i] = bearing_deg(lat[i-1], lon[i-1], lat[i], lon[i])
+    uw = np.array(unwrap_deg(list(bearings)), dtype=float)
+
+    circles = []
+    start_idx, circle_id, g = 0, 0, 9.81
+    i = 1
+    while i < n:
+        rot = abs(uw[i] - uw[start_idx])
+        if rot >= 360.0:
+            i0, i1 = start_idx, i
+            dur = t[i1] - t[i0]
+
+            # duration sanity
+            if not (min_duration_s <= dur <= max_duration_s):
+                start_idx = i
+                i += 1
+                continue
+
+            # distance & mean ground speed
+            dist = 0.0
+            for k in range(i0+1, i1+1):
+                dist += haversine_m(lat[k-1], lon[k-1], lat[k], lon[k])
+            v_mean = dist/dur if dur > 0 else np.nan  # m/s
+
+            # Angular rate and turn radius
+            omega = 2*math.pi/dur if dur > 0 else np.nan
+            radius = (v_mean/omega) if (omega and omega > 0) else np.nan
+            if (np.isnan(radius)) or (radius < min_radius_m) or (radius > max_radius_m):
+                start_idx = i
+                i += 1
+                continue
+
+            bank = math.degrees(math.atan((v_mean**2)/(g*radius))) if (radius and np.isfinite(radius)) else np.nan
+            if (np.isnan(bank)) or (bank < min_bank_deg):
+                start_idx = i
+                i += 1
+                continue
+
+            # Robust altitude gain by least-squares slope
+            idx = np.arange(i0, i1+1)
+            tt = t[idx] - t[i0]
+            aa = alt[idx]
+            if len(tt) >= 3 and np.all(np.isfinite(tt)) and np.any(np.isfinite(aa)):
+                A = np.vstack([tt, np.ones_like(tt)]).T
+                mask = np.isfinite(aa)
+                if mask.sum() >= 3:
+                    m, c = np.linalg.lstsq(A[mask], aa[mask], rcond=None)[0]
+                    alt_gain = float(m * dur)
+                else:
+                    span = i1 - i0 + 1
+                    q = max(1, span // 4)
+                    first_med = np.nanmedian(aa[:q])
+                    last_med  = np.nanmedian(aa[-q:])
+                    alt_gain = (last_med - first_med) if np.isfinite(first_med) and np.isfinite(last_med) else np.nan
+            else:
+                alt_gain = np.nan
+
+            # Physical plausibility bound
+            max_gain = vmax_climb_ms * dur
+            if np.isfinite(alt_gain) and abs(alt_gain) > max_gain:
+                alt_gain = np.sign(alt_gain) * max_gain
+
+            climb = (alt_gain / dur) if (dur > 0 and np.isfinite(alt_gain)) else np.nan
+
+            circles.append({
+                "circle_id": circle_id,
+                "seg_id": None,
+                "t_start": float(t[i0]),
+                "t_end": float(t[i1]),
+                "duration_s": float(dur),
+                "avg_speed_kmh": float(v_mean*3.6) if np.isfinite(v_mean) else np.nan,
+                "alt_gain_m":  float(alt_gain) if np.isfinite(alt_gain) else np.nan,
+                "climb_rate_ms": float(climb) if np.isfinite(climb) else np.nan,
+                "turn_radius_m": float(radius) if np.isfinite(radius) else np.nan,
+                "circle_diameter_m": float(2*radius) if np.isfinite(radius) else np.nan,
+                "bank_angle_deg": float(bank) if np.isfinite(bank) else np.nan,
+                "lat": float(np.nanmean(lat[i0:i1+1])),
+                "lon": float(np.nanmean(lon[i0:i1+1])),
+            })
+            circle_id += 1
+
+            start_idx = i
+        i += 1
+
+    return pd.DataFrame(circles)
 
 # ---------------------------------------------------------------------------
 # 3) Cluster circles
@@ -284,11 +350,6 @@ def detect_circles(df: pd.DataFrame,
 def cluster_circles(circles: pd.DataFrame,
                     eps_m: float = 200.0,
                     min_samples: int = 2) -> pd.DataFrame:
-    """
-    Output columns (canonical order):
-      cluster_id, lat, lon, t_start, t_end, climb_rate_ms, climb_rate_ms_median,
-      alt_gain_m_mean, duration_s_mean, n_circles
-    """
     base_cols = [
         "cluster_id", "lat", "lon", "t_start", "t_end",
         "climb_rate_ms", "climb_rate_ms_median", "alt_gain_m_mean", "duration_s_mean",
@@ -302,7 +363,6 @@ def cluster_circles(circles: pd.DataFrame,
         return pd.DataFrame(columns=base_cols)
 
     if _HAVE_SKLEARN:
-        import numpy as np
         latr = np.radians(d["lat"].to_numpy()); lonr = np.radians(d["lon"].to_numpy())
         X = np.c_[latr, lonr]
         def hav(u, v):
@@ -377,10 +437,6 @@ def cluster_circles(circles: pd.DataFrame,
 def detect_altitude_clusters(track: pd.DataFrame,
                              min_gain_m: float = 30.0,
                              min_duration_s: float = 20.0) -> pd.DataFrame:
-    """
-    Output columns (canonical order):
-      cluster_id, lat, lon, t_start, t_end, climb_rate_ms, alt_gain_m, duration_s
-    """
     cols = ["cluster_id","lat","lon","t_start","t_end","climb_rate_ms","alt_gain_m","duration_s"]
     if track.empty:
         return pd.DataFrame(columns=cols)
@@ -447,13 +503,6 @@ def match_clusters(circle_clusters: pd.DataFrame,
                    alt_clusters: pd.DataFrame,
                    max_dist_m: float = 600.0,
                    min_overlap_frac: float = 0.25) -> Tuple[pd.DataFrame, dict]:
-    """
-    Output columns (canonical order):
-      lat, lon, climb_rate_ms, alt_gain_m, duration_s,
-      circle_cluster_id, alt_cluster_id,
-      circle_lat, circle_lon, alt_lat, alt_lon,
-      dist_m, time_overlap_s, overlap_frac
-    """
     cols = [
         "lat","lon","climb_rate_ms","alt_gain_m","duration_s",
         "circle_cluster_id","alt_cluster_id",
@@ -562,13 +611,23 @@ def main() -> int:
             track = track.iloc[tow_end_idx + 1:].reset_index(drop=True)
             logf_write(logf, f"[INFO] Tow cut at idx={tow_end_idx}, samples left={len(track)}")
 
-        # 2) Circles
+        # 2) Circles (enriched)
         circles = detect_circles(track)
-        circles_cols = ["lat","lon","t_start","t_end","climb_rate_ms","alt_gain_m","duration_s"]
-        if not circles.empty:
-            circles = circles.reindex(columns=[c for c in circles_cols if c in circles.columns])
-        else:
+        circles_cols = [
+            "lat","lon","t_start","t_end","climb_rate_ms","alt_gain_m","duration_s",
+            "circle_id","seg_id","avg_speed_kmh","turn_radius_m","circle_diameter_m","bank_angle_deg"
+        ]
+        if circles.empty:
             circles = pd.DataFrame(columns=circles_cols)
+        else:
+            # reorder/add missing to canonical set
+            for k in circles_cols:
+                if k not in circles.columns:
+                    circles[k] = pd.NA
+            circles["lat"] = circles["lat"].astype(float)
+            circles["lon"] = circles["lon"].astype(float)
+            circles = circles[circles_cols]
+
         (run_dir / "circles.csv").parent.mkdir(parents=True, exist_ok=True)
         circles.to_csv(run_dir / "circles.csv", index=False)
 

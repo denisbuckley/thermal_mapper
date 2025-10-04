@@ -44,11 +44,14 @@ def log(msg: str, fh):
 
 def parse_args():
     ap = argparse.ArgumentParser(description="Group matched clusters into persistent thermal locations.")
+    # tunings: set default=None so we can prompt if not provided
+    ap.add_argument("--method", choices=["dbscan","hdbscan","optics"], default=None)
+    ap.add_argument("--eps-km", type=float, default=None)
+    ap.add_argument("--min-samples", type=int, default=None)
+    ap.add_argument("--strength-min", type=float, default=None)
+
+    # keep paths & misc with real defaults (no prompting for these)
     ap.add_argument("--inputs-root", default="outputs/batch_csv")
-    ap.add_argument("--method", default="dbscan", choices=["dbscan","hdbscan","optics"])
-    ap.add_argument("--eps-km", type=float, default=5.0)
-    ap.add_argument("--min-samples", type=int, default=2)
-    ap.add_argument("--strength-min", type=float, default=1.0)
     ap.add_argument("--out-csv", default="outputs/waypoints/thermal_waypoints_v1.csv")
     ap.add_argument("--out-geojson", default="outputs/waypoints/thermal_waypoints_v1.geojson")
     ap.add_argument("--debug-log", default="outputs/waypoints/grouping_debug.log")
@@ -69,13 +72,20 @@ def robust_median(series: pd.Series) -> float:
     return float(np.median(series.values))
 
 def load_all_matches(inputs_root: Path, logfh):
-    rows=[]
+    rows = []
     for csv in inputs_root.glob("**/matched_clusters.csv"):
         try:
-            df=pd.read_csv(csv); df["__source_file"]=str(csv); rows.append(df)
+            df = pd.read_csv(csv)
+            df["__source_file"] = str(csv)
+            rows.append(df)
             log(f"Loaded {len(df)} rows from {csv}", logfh)
-        except Exception as e: log(f"[WARN] Failed {csv}: {e}", logfh)
+        except Exception as e:
+            log(f"[WARN] Failed {csv}: {e}", logfh)
+
+    # filter out empties to silence pandas FutureWarning
+    rows = [df for df in rows if not df.empty]
     return pd.concat(rows, ignore_index=True) if rows else pd.DataFrame()
+
 
 def filter_inputs(df, strength_min, dstart, dend, logfh):
     need=["lat","lon","climb_rate_ms"]
@@ -121,23 +131,86 @@ def write_geojson(df,path:Path):
     with open(path,"w") as f: json.dump(fc,f,indent=2)
 
 def main():
-    a=parse_args(); inputs=Path(a.inputs_root)
-    out_csv, out_geo, logp=Path(a.out_csv), Path(a.out_geojson), Path(a.debug_log)
-    logp.parent.mkdir(parents=True,exist_ok=True)
-    with open(logp,"a") as lf:
-        log("=== build_thermals_v1 start ===",lf)
-        df=load_all_matches(inputs,lf)
-        if df.empty: return 0
-        df=filter_inputs(df,a.strength_min,to_date(a.date_start),to_date(a.date_end),lf)
-        if df.empty: return 0
-        labels=run_dbscan_haversine(df.lat,df.lon,a.eps_km,a.min_samples)
-        out=aggregate_clusters(df,labels,a.method,a.eps_km,a.min_samples,a.strength_min)
-        log(f"Clusters: {len(out)}",lf)
-        if not a.dry_run:
-            out_csv.parent.mkdir(parents=True,exist_ok=True)
-            out.to_csv(out_csv,index=False); write_geojson(out,out_geo)
-            log(f"[OK] wrote {out_csv} & {out_geo}",lf)
-        log("=== done ===",lf)
+    # ---- parse once ----
+    args = parse_args()
+    inputs = Path(args.inputs_root)
+
+    # ---- single-pass prompts for tunings (only if flag not given) ----
+    def _ask(val, label, default, cast):
+        if val is not None:
+            return cast(val)
+        raw = input(f"{label} [{default}]: ").strip()
+        return cast(raw) if raw else cast(default)
+
+    # Defaults for prompts (match your header docs)
+    DEF_METHOD      = "dbscan"
+    DEF_EPS_KM      = 1
+    DEF_MIN_SAMPLES = 5
+    DEF_STRENGTH    = 2
+
+    method       = _ask(args.method,        "Clustering method (dbscan|hdbscan|optics)", DEF_METHOD, str).lower()
+    eps_km       = _ask(args.eps_km,        "DBSCAN/OPTICS eps (km)",                    DEF_EPS_KM, float)
+    min_samples  = _ask(args.min_samples,   "Min samples per cluster",                    DEF_MIN_SAMPLES, int)
+    strength_min = _ask(args.strength_min,  "Min strength (weight) per point",           DEF_STRENGTH, float)
+
+    print(f"[TUNING] method={method} eps_km={eps_km} min_samples={min_samples} strength_min={strength_min}")
+
+    # ---- paths & logging ----
+    out_csv = Path(args.out_csv)
+    out_geo = Path(args.out_geojson)
+    logp    = Path(args.debug_log)
+    logp.parent.mkdir(parents=True, exist_ok=True)
+    out_csv.parent.mkdir(parents=True, exist_ok=True)
+    out_geo.parent.mkdir(parents=True, exist_ok=True)
+
+    def write_empty_outputs():
+        pd.DataFrame(columns=["lat","lon","radius_m","strength_mean","strength_p95",
+                              "method","eps_km","min_samples","strength_min","wp_id"]
+                    ).to_csv(out_csv, index=False)
+        with open(out_geo, "w") as f:
+            json.dump({"type":"FeatureCollection","features":[]}, f, indent=2)
+
+    with open(logp, "a") as lf:
+        log("=== build_thermals_v1 start ===", lf)
+        log(f"TUNING: method={method} eps_km={eps_km} min_samples={min_samples} strength_min={strength_min}", lf)
+
+        # 1) load all matched_clusters
+        df = load_all_matches(inputs, lf)
+        if df.empty:
+            log("[WARN] No matched_clusters.csv found; writing empty outputs.", lf)
+            write_empty_outputs()
+            log("=== done ===", lf)
+            return 0
+
+        # 2) filter by strength/date using the RESOLVED values (not args.*)
+        df = filter_inputs(df, strength_min, to_date(args.date_start), to_date(args.date_end), lf)
+        if df.empty:
+            log("[INFO] No rows after filter; writing empty outputs.", lf)
+            write_empty_outputs()
+            log("=== done ===", lf)
+            return 0
+
+        # 3) cluster using the RESOLVED values
+        labels = run_dbscan_haversine(df.lat, df.lon, eps_km, min_samples)
+        out = aggregate_clusters(df, labels, method, eps_km, min_samples, strength_min)
+        log(f"Clusters: {len(out)}", lf)
+
+        # --- cluster membership summary ---
+        cluster_sizes = pd.Series(labels)[labels >= 0].value_counts().sort_index()
+        if not cluster_sizes.empty:
+            log(f"[SUMMARY] Cluster sizes (points per cluster):", lf)
+            log(f"  min={cluster_sizes.min()}, mean={cluster_sizes.mean():.1f}, max={cluster_sizes.max()}", lf)
+            # If you want the full distribution:
+            for cid, size in cluster_sizes.items():
+                log(f"    cluster {cid}: {size} points", lf)
+
+        # 4) write artifacts (always)
+        if not args.dry_run:
+            out.to_csv(out_csv, index=False)
+            write_geojson(out, out_geo)
+            log(f"[OK] wrote {out_csv} & {out_geo}", lf)
+
+        log("=== done ===", lf)
     return 0
 
 if __name__=="__main__": raise SystemExit(main())

@@ -103,25 +103,53 @@ def run_dbscan_haversine(lat, lon, eps_km, min_samples):
     return model.fit_predict(np.c_[lat_rad, lon_rad])
 
 def aggregate_clusters(df, labels, method, eps_km, min_samples, strength_min):
-    df=df.copy(); df["__label"]=labels; df=df[df["__label"]>=0]
-    out=[]
-    for lab,grp in df.groupby("__label"):
-        lat_med, lon_med=robust_median(grp["lat"]), robust_median(grp["lon"])
-        lat_rad, lon_rad=np.radians(grp["lat"]), np.radians(grp["lon"])
-        r_m=max([great_circle_distance_m(np.radians(lat_med),np.radians(lon_med),a,b)
-                 for a,b in zip(lat_rad,lon_rad)])
-        out.append({
-            "lat":lat_med,"lon":lon_med,"radius_m":r_m,
-            "strength_mean":float(np.mean(grp["climb_rate_ms"])),
-            "strength_p95":float(np.percentile(grp["climb_rate_ms"],95)),
-            "method":method,"eps_km":eps_km,
-            "min_samples":min_samples,"strength_min":strength_min})
-    out=pd.DataFrame(out)
-    if not out.empty:
-        out=out.sort_values(["strength_p95","strength_mean","radius_m"],
-                            ascending=[False,False,True]).reset_index(drop=True)
-        out.insert(0,"wp_id",np.arange(len(out)))
-    return out
+    """
+    Return:
+      - out: DataFrame of waypoints, including 'cluster_label' (DBSCAN label) and 'wp_id'
+      - lab_to_wp: dict mapping original DBSCAN label -> wp_id
+    """
+    df = df.copy()
+    df["__label"] = labels
+    df = df[df["__label"] >= 0]  # keep only clustered points
+
+    rows = []
+    for lab, grp in df.groupby("__label"):
+        lat_med, lon_med = robust_median(grp["lat"]), robust_median(grp["lon"])
+        lat_rad, lon_rad = np.radians(grp["lat"]), np.radians(grp["lon"])
+        r_m = max([
+            great_circle_distance_m(np.radians(lat_med), np.radians(lon_med), a, b)
+            for a, b in zip(lat_rad, lon_rad)
+        ]) if len(grp) else 0.0
+        rows.append({
+            "cluster_label": lab,            # <-- keep DBSCAN label
+            "lat": lat_med,
+            "lon": lon_med,
+            "radius_m": r_m,
+            "strength_mean": float(np.mean(grp["climb_rate_ms"])),
+            "strength_p95": float(np.percentile(grp["climb_rate_ms"], 95)),
+            "method": method,
+            "eps_km": eps_km,
+            "min_samples": min_samples,
+            "strength_min": strength_min,
+            "encounters": int(len(grp)),     # convenience: points in this cluster
+        })
+
+    out = pd.DataFrame(rows)
+    if out.empty:
+        return out, {}
+
+    # sort strongest/tightest first (as you had)
+    out = out.sort_values(
+        ["strength_p95", "strength_mean", "radius_m"],
+        ascending=[False, False, True]
+    ).reset_index(drop=True)
+
+    # assign waypoint ids
+    out.insert(0, "wp_id", np.arange(len(out)))
+
+    # build mapping from DBSCAN label -> wp_id
+    lab_to_wp = dict(zip(out["cluster_label"].tolist(), out["wp_id"].tolist()))
+    return out, lab_to_wp
 
 def write_geojson(df,path:Path):
     feats=[{"type":"Feature","geometry":{"type":"Point","coordinates":[r.lon,r.lat]},
@@ -192,8 +220,22 @@ def main():
 
         # 3) cluster using the RESOLVED values
         labels = run_dbscan_haversine(df.lat, df.lon, eps_km, min_samples)
-        out = aggregate_clusters(df, labels, method, eps_km, min_samples, strength_min)
+        out, lab_to_wp = aggregate_clusters(df, labels, method, eps_km, min_samples, strength_min)
         log(f"Clusters: {len(out)}", lf)
+
+        # --- cluster membership summary ---
+        cluster_sizes = pd.Series(labels)[labels >= 0].value_counts().sort_index()
+        for cid, size in cluster_sizes.items():
+            log(f"  Cluster {cid}: {size} points", lf)
+
+        # optional: report average size
+        if not cluster_sizes.empty:
+            log(f"[STATS] Avg pts/cluster: {cluster_sizes.mean():.1f}", lf)
+
+        # also persist to CSV for later analysis
+        stats_csv = out_csv.with_name(out_csv.stem + "_membership.csv")
+        cluster_sizes.rename("points").to_csv(stats_csv, header=True)
+        log(f"[OK] wrote cluster membership stats → {stats_csv}", lf)
 
         # --- cluster membership summary ---
         cluster_sizes = pd.Series(labels)[labels >= 0].value_counts().sort_index()

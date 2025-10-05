@@ -308,6 +308,36 @@ def detect_circles(df: pd.DataFrame,
                 i += 1
                 continue
 
+            # --- Within-circle bank-angle variability (instantaneous bank from v*omega/g) ---
+            banks_deg = []
+            for k in range(i0 + 1, i1 + 1):
+                dt = t[k] - t[k - 1]
+                if dt <= 0:
+                    continue
+                # angular velocity (rad/s) from unwrapped heading steps
+                dtheta_rad = math.radians(uw[k] - uw[k - 1])
+                omega = dtheta_rad / dt
+                # ground speed (m/s) from segment distance
+                seg_m = haversine_m(lat[k - 1], lon[k - 1], lat[k], lon[k])
+                v_inst = seg_m / dt
+                # instantaneous bank angle (rad) via centripetal accel relation
+                b_rad = math.atan((v_inst * omega) / g) if np.isfinite(v_inst) and np.isfinite(omega) else float("nan")
+                if np.isfinite(b_rad):
+                    banks_deg.append(math.degrees(b_rad))
+
+            if banks_deg:
+                b_arr = np.array(banks_deg, dtype=float)
+                bank_std_deg_w   = float(np.nanstd(b_arr, ddof=1)) if len(b_arr) >= 2 else 0.0
+                bank_range_deg_w = float(np.nanmax(b_arr) - np.nanmin(b_arr))
+                if len(b_arr) >= 2:
+                    bank_masd_deg_w = float(np.nanmean(np.abs(np.diff(b_arr))))  # MASD = mean abs successive diff
+                else:
+                    bank_masd_deg_w = 0.0
+            else:
+                bank_std_deg_w = np.nan
+                bank_range_deg_w = np.nan
+                bank_masd_deg_w = np.nan
+
             # Robust altitude gain by least-squares slope
             idx = np.arange(i0, i1+1)
             tt = t[idx] - t[i0]
@@ -348,6 +378,9 @@ def detect_circles(df: pd.DataFrame,
                 "bank_angle_deg": float(bank) if np.isfinite(bank) else np.nan,
                 "lat": float(np.nanmean(lat[i0:i1+1])),
                 "lon": float(np.nanmean(lon[i0:i1+1])),
+                "bank_std_deg": bank_std_deg_w,
+                "bank_range_deg": bank_range_deg_w,
+                "bank_masd_deg": bank_masd_deg_w,
             })
             circle_id += 1
 
@@ -704,7 +737,8 @@ def main() -> int:
     circles = detect_circles(track)
     circle_cols = [
         "lat","lon","t_start","t_end","climb_rate_ms","alt_gain_m","duration_s",
-        "circle_id","seg_id","avg_speed_kmh","turn_radius_m","circle_diameter_m","bank_angle_deg"
+        "circle_id","seg_id","avg_speed_kmh","turn_radius_m","circle_diameter_m","bank_angle_deg",
+        "bank_std_deg","bank_range_deg","bank_masd_deg"
     ]
     if circles.empty:
         circles = pd.DataFrame(columns=circle_cols)

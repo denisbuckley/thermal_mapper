@@ -32,7 +32,7 @@ def main():
     if len(sys.argv) > 1:
         igc_path = Path(sys.argv[1])
     else:
-        default_igc = Path("igc/2020-11-08 Lumpy Paterson 108645.igc")
+        default_igc = Path("igc_subset/2020-11-08 Lumpy Paterson 108645.igc")
         try:
             user_in = input(f"Enter path to IGC file [default: {default_igc}]: ").strip()
         except EOFError:

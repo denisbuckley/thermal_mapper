@@ -685,106 +685,108 @@ def matched_summary_text(run_dir: Path) -> str:
             f"dist_m mean {stat('dist_m')} | overlap {stat('overlap_frac', fmt='.2f')}")
 
 def render_one(stem: str, run_dir: Path, show: bool = True) -> None:
-    # --- load track ---
+    # --- load track (as your helper already does) ---
     track = load_track_for_plot(run_dir, stem)
     if len(track) < 2:
         print(f"[PLOT] skip {stem}: <2 points")
         return
 
-    # --- segments (blue sink, yellow climb) ---
-    segs, is_climb = climb_segments(track)
+    # --- compute total distance (km) from lat/lon ---
+    lats = track["lat"].to_numpy()
+    lons = track["lon"].to_numpy()
+    dist_m = 0.0
+    for i in range(1, len(track)):
+        dist_m += haversine_m(lats[i-1], lons[i-1], lats[i], lons[i])
+    dist_km = dist_m / 1000.0
 
+    # --- compute duration (prefer datetime 'time'; else fall back to IGC time_s) ---
+    duration_s = None
+    if "time" in track.columns and pd.to_datetime(track["time"], errors="coerce").notna().any():
+        tmin = pd.to_datetime(track["time"], errors="coerce").min()
+        tmax = pd.to_datetime(track["time"], errors="coerce").max()
+        if pd.notna(tmin) and pd.notna(tmax):
+            duration_s = (tmax - tmin).total_seconds()
+    if duration_s is None:
+        igc_copy = run_dir / f"{stem}.igc"
+        if igc_copy.exists():
+            try:
+                df_igc = parse_igc_brecords(igc_copy)
+                if len(df_igc):
+                    duration_s = float(df_igc["time_s"].iloc[-1] - df_igc["time_s"].iloc[0])
+            except Exception:
+                duration_s = None
+
+    def _fmt_hms(sec: Optional[float]) -> str:
+        if sec is None or not np.isfinite(sec) or sec <= 0:
+            return "n/a"
+        sec = int(round(sec))
+        h = sec // 3600
+        m = (sec % 3600) // 60
+        s = sec % 60
+        return f"{h:02d}:{m:02d}:{s:02d}"
+
+    # --- figure & axes ---
     fig, ax = plt.subplots(figsize=(9, 8))
     ax.set_title(f"Glider Track & Clusters — {stem}")
-    ax.set_xlabel("Longitude")
-    ax.set_ylabel("Latitude")
+    ax.set_xlabel("Longitude"); ax.set_ylabel("Latitude")
 
+    # track segments (thick)
+    segs, is_climb = climb_segments(track)
     lc_sink  = LineCollection(segs[~is_climb], colors="#1E6EFF", linewidths=4.0, alpha=0.9)
     lc_climb = LineCollection(segs[ is_climb], colors="#FFD400", linewidths=4.0, alpha=0.95)
-    ax.add_collection(lc_sink)
-    ax.add_collection(lc_climb)
+    ax.add_collection(lc_sink); ax.add_collection(lc_climb)
 
-    # map extents
+    # extents
     ax.set_xlim(track["lon"].min() - 0.01, track["lon"].max() + 0.01)
     ax.set_ylim(track["lat"].min() - 0.01, track["lat"].max() + 0.01)
 
     # overlays
     alt_df = read_clusters_xy(run_dir, "altitude_clusters.csv")
     if alt_df is not None and len(alt_df):
-        ax.scatter(
-            alt_df["lon"], alt_df["lat"],
-            s=100, facecolors="none", edgecolors="green",
-            marker="s", linewidths=2.2,
-            label="altitude_clusters (green □)",
-        )
+        ax.scatter(alt_df["lon"], alt_df["lat"], s=100, facecolors="none",
+                   edgecolors="green", marker="s", linewidths=2.2,
+                   label="altitude_clusters (green □)")
 
     circle_df = read_clusters_xy(run_dir, "circle_clusters_enriched.csv")
     if circle_df is not None and len(circle_df):
-        ax.scatter(
-            circle_df["lon"], circle_df["lat"],
-            s=200, facecolors="none", edgecolors="purple",
-            marker="o", linewidths=2.4,
-            label="circle_clusters (purple ○)",
-        )
+        ax.scatter(circle_df["lon"], circle_df["lat"], s=200, facecolors="none",
+                   edgecolors="purple", marker="o", linewidths=2.4,
+                   label="circle_clusters (purple ○)")
 
     mfile = run_dir / "matched_clusters.csv"
     if mfile.exists():
         m = pd.read_csv(mfile)
         cols = {c.lower(): c for c in m.columns}
         if "lat" in cols and "lon" in cols and len(m):
-            ax.scatter(
-                pd.to_numeric(m[cols["lon"]], errors="coerce"),
-                pd.to_numeric(m[cols["lat"]], errors="coerce"),
-                s=300, color="red", marker="x", linewidths=2.8,
-                label="matched (red ×)",
-            )
+            ax.scatter(pd.to_numeric(m[cols["lon"]], errors="coerce"),
+                       pd.to_numeric(m[cols["lat"]], errors="coerce"),
+                       s=300, color="purple", marker="x", linewidths=2.8,
+                       label="matched (purple ×)")
 
     ax.legend(loc="best", frameon=True)
     ax.grid(True, linestyle=":", alpha=0.4)
 
-    # --- build info box content ---
+    # --- info box (bottom-right *inside* figure) ---
     pilot = igc_pilot_name(run_dir / f"{stem}.igc")
     weglide_url = f"https://www.weglide.org/flight/{stem}"
 
-    p = run_dir / "matched_clusters.csv"
-    if p.exists() and p.stat().st_size > 0:
-        try:
-            m = pd.read_csv(p)
-            n = len(m)
-            cols = {c.lower(): c for c in m.columns}
-            def col(name): return cols.get(name)
-            def stat(name, fn=np.nanmean, fmt=".2f"):
-                c = col(name)
-                if not c: return "n/a"
-                v = pd.to_numeric(m[c], errors="coerce").dropna()
-                return format(fn(v), fmt) if len(v) else "n/a"
-            stats_lines = [
-                f"matches: {n}",
-                f"climb_rate_ms mean {stat('climb_rate_ms')} (p90 {stat('climb_rate_ms', fn=lambda s: np.percentile(s,90))})",
-                f"alt_gain_m mean {stat('alt_gain_m')}",
-                f"dur_s mean {stat('duration_s')}",
-                f"dist_m mean {stat('dist_m')}",
-                f"overlap {stat('overlap_frac', fmt='.2f')}",
-            ]
-        except Exception:
-            stats_lines = ["matches: (unreadable)"]
-    else:
-        stats_lines = ["matches: 0"]
+    # make matched stats multiline (convert " | " to newlines if needed)
+    stats_txt = matched_summary_text(run_dir)
+    stats_txt = stats_txt.replace(" | ", "\n")
 
-    info_box = "\n".join([
-        f"Pilot: {pilot}",
-        f"Weglide: {weglide_url}",
-        *stats_lines
-    ])
-
-    # --- place info box inside axes, bottom-right ---
-    ax.text(
-        0.99, 0.01, info_box,
-        transform=ax.transAxes,
-        ha="right", va="bottom",
-        fontsize=9, color="black",
-        bbox=dict(boxstyle="round,pad=0.35", fc="white", ec="0.6", alpha=0.9)
+    info_box = (
+        f"Pilot: {pilot}\n"
+        f"Distance: {dist_km:.1f} km\n"
+        f"Duration: {_fmt_hms(duration_s)}\n"
+        f"Weglide: {weglide_url}\n"
+        f"{stats_txt}"
     )
+
+    # Position slightly in from the bottom-right so it doesn't clip
+    fig.text(0.965, 0.035, info_box,
+             ha="right", va="bottom",
+             fontsize=9, color="black",
+             bbox=dict(boxstyle="round,pad=0.35", fc="white", ec="0.6", alpha=0.9))
 
     plt.tight_layout()
     if show:

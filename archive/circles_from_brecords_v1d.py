@@ -375,9 +375,32 @@ def main():
     d = d[[c for c in canonical if c in d.columns] + extras]
 
     # Write circles.csv in run_dir
+    # Write circles.csv in run_dir
     out_csv = run_dir / "circles.csv"
     d.to_csv(out_csv, index=False)
     print(f"[OK] wrote {len(d)} circles → {out_csv}")
+
+    # --- NEW: copy original IGC into run_dir ---
+    import shutil
+    stem = run_dir.name  # folder name like "123310"
+    src_dir = Path("/Users/denisbuckley/PycharmProjects/chatgpt_igc/igc")
+    src1 = src_dir / f"{stem}.igc"
+    src2 = src_dir / f"{stem}.IGC"
+    dest = run_dir / f"{stem}.igc"
+    try:
+        if src1.exists():
+            shutil.copy2(src1, dest)
+            print(f"[OK] copied {src1} → {dest}")
+        elif src2.exists():
+            shutil.copy2(src2, dest)
+            print(f"[OK] copied {src2} → {dest}")
+        else:
+            print(f"[WARN] no IGC found in {src_dir} for {stem}")
+    except Exception as e:
+        print(f"[ERR] copying IGC failed: {e}")
+    # --------------------------------------------
+
+
     return 0
 
 if __name__ == "__main__":

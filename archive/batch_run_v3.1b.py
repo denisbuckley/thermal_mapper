@@ -650,11 +650,24 @@ def main() -> int:
     alt_min_duration   = float(cfg["alt_min_duration"])
     match_max_dist_m   = float(cfg["match_max_dist_m"])
     match_min_overlap  = float(cfg["match_min_overlap"])
+    # NEW circle-detection knobs
+    circle_min_duration_s = float(cfg.get("circle_min_duration_s", 6.0))
+    circle_max_duration_s = float(cfg.get("circle_max_duration_s", 60.0))
+    circle_min_radius_m = float(cfg.get("circle_min_radius_m", 8.0))
+    circle_max_radius_m = float(cfg.get("circle_max_radius_m", 600.0))
+    circle_min_bank_deg = float(cfg.get("circle_min_bank_deg", 5.0))
+    circle_vmax_climb_ms = float(cfg.get("circle_vmax_climb_ms", 10.0))
 
     # Echo tunings to console & global log
-    tuneline = (f"TUNING: circle_eps_m={circle_eps_m}, circle_min_samples={circle_min_samples}, "
-                f"alt_min_gain={alt_min_gain}, alt_min_duration={alt_min_duration}, "
-                f"match_max_dist_m={match_max_dist_m}, match_min_overlap={match_min_overlap}")
+    tuneline = (
+        "TUNING: "
+        f"circle_eps_m={circle_eps_m}, circle_min_samples={circle_min_samples}, "
+        f"alt_min_gain={alt_min_gain}, alt_min_duration={alt_min_duration}, "
+        f"match_max_dist_m={match_max_dist_m}, match_min_overlap={match_min_overlap}, "
+        f"circle(min_dur={circle_min_duration_s}, max_dur={circle_max_duration_s}, "
+        f"min_r={circle_min_radius_m}, max_r={circle_max_radius_m}, "
+        f"min_bank={circle_min_bank_deg}, vmax_climb={circle_vmax_climb_ms})"
+    )
     print(f"[TUNING] {tuneline}")
     logf_write(BATCH_LOG, f"[BATCH-START] {tuneline}")
     logf_write(BATCH_LOG, f"[BATCH-START] folder={igc_dir} files={len(igc_files)}")
@@ -691,7 +704,12 @@ def main() -> int:
             logf_write(logf, f"[INFO] Tow cut at idx={tow_end_idx}, samples left={len(track)}")
 
         # 2) Circles (enriched)
-        circles = detect_circles(track)
+        circles = detect_circles(track,min_duration_s=circle_min_duration_s,
+    max_duration_s=circle_max_duration_s,
+    min_radius_m=circle_min_radius_m,
+    max_radius_m=circle_max_radius_m,
+    min_bank_deg=circle_min_bank_deg,
+    vmax_climb_ms=circle_vmax_climb_ms,)
         circles_cols = [
             "lat", "lon", "t_start", "t_end", "climb_rate_ms", "alt_gain_m", "duration_s",
             "circle_id", "seg_id", "avg_speed_kmh", "turn_radius_m", "circle_diameter_m", "bank_angle_deg",

@@ -783,6 +783,14 @@ def render_one(stem: str, run_dir: Path, show: bool = True) -> None:
                            s=300, color="red", marker="x", linewidths=2.8,
                            label="matched (red ×)")
 
+    # --- mark start point ---
+    start_lat = track["lat"].iloc[0]
+    start_lon = track["lon"].iloc[0]
+    ax_map.scatter(start_lon, start_lat, marker="*", s=380,
+                   color="white", edgecolors="black", linewidths=2,
+                   zorder=10, label="start")
+
+
     ax_map.legend(loc="best", frameon=True)
     ax_map.grid(True, linestyle=":", alpha=0.4)
 
@@ -818,7 +826,7 @@ def render_one(stem: str, run_dir: Path, show: bool = True) -> None:
 
     # position slightly in from bottom-right so it doesn't clip
     txt = fig.text(
-        0.965, 0.035, info_box,
+        0.965, 0.335, info_box,
         ha="right", va="bottom",
         fontsize=9, color="black",
         bbox=dict(boxstyle="round,pad=0.35", fc="white", ec="0.6", alpha=0.9)

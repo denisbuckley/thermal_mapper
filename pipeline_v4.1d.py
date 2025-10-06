@@ -760,8 +760,8 @@ def render_one(stem: str, run_dir: Path, show: bool = True) -> None:
         if "lat" in cols and "lon" in cols and len(m):
             ax.scatter(pd.to_numeric(m[cols["lon"]], errors="coerce"),
                        pd.to_numeric(m[cols["lat"]], errors="coerce"),
-                       s=300, color="purple", marker="x", linewidths=2.8,
-                       label="matched (purple ×)")
+                       s=300, color="red", marker="x", linewidths=2.8,
+                       label="matched (red ×)")
 
     ax.legend(loc="best", frameon=True)
     ax.grid(True, linestyle=":", alpha=0.4)

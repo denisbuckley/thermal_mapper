@@ -75,11 +75,11 @@ def matched_summary_text(run_dir: Path) -> str:
     mean_ovl  = stat("overlap_frac", fmt=".2f")
 
     return (f"matches: {n}\n"
+            f"overlap {mean_ovl}\n"
             f"climb_rate_ms mean {mean_cr} (p90 {p90_cr})\n"
             f"alt_gain_m mean {mean_gain}\n"
             f"dur_s mean {mean_dur}\n"
-            f"dist_m mean {mean_dist}\n"
-            f"overlap {mean_ovl}")
+            f"dist_m mean {mean_dist}\n")
 
 # Optional scikit-learn for DBSCAN
 try:
@@ -693,74 +693,74 @@ def matched_summary_text(run_dir: Path) -> str:
         if not c: return "n/a"
         v = pd.to_numeric(m[c], errors="coerce").dropna()
         return format(fn(v), fmt) if len(v) else "n/a"
-    return (f"matches: {n} | climb_rate_ms mean {stat('climb_rate_ms')} "
-            f"(p90 {stat('climb_rate_ms', fn=lambda s: np.percentile(s,90))}) | "
-            f"alt_gain_m mean {stat('alt_gain_m')} | dur_s mean {stat('duration_s')} | "
-            f"dist_m mean {stat('dist_m')} | overlap {stat('overlap_frac', fmt='.2f')}")
+
+    return (
+        f"matched clusters: {n}\n"
+        f"overlap mean {stat('overlap_frac', fmt='.2f')}\n"
+        f"dur_s mean {stat('duration_s')}\n"
+        f"dist_m mean {stat('dist_m')}\n"
+        f"alt_gain_m mean {stat('alt_gain_m')}\n"
+        f"climb_rate_ms mean {stat('climb_rate_ms')}\n"
+        f"(p90 {stat('climb_rate_ms', fn=lambda s: np.percentile(s, 90))})"
+
+    )
 
 def render_one(stem: str, run_dir: Path, show: bool = True) -> None:
-    # --- load track ---
+    # --- load track for map panel ---
     track = load_track_for_plot(run_dir, stem)
     if len(track) < 2:
         print(f"[PLOT] skip {stem}: <2 points")
         return
 
-    # --- compute total distance (km) from lat/lon ---
-    lats = track["lat"].to_numpy()
-    lons = track["lon"].to_numpy()
+    # --- compute flight distance (km) & duration (hh:mm:ss) ---
+    def hav(lat1, lon1, lat2, lon2):
+        R = 6371008.8
+        import math
+        p1 = math.radians(lat1); p2 = math.radians(lat2)
+        dphi = p2 - p1; dl = math.radians(lon2 - lon1)
+        a = math.sin(dphi/2)**2 + math.cos(p1)*math.cos(p2)*math.sin(dl/2)**2
+        return 2*R*math.asin(math.sqrt(a))
     dist_m = 0.0
     for i in range(1, len(track)):
-        dist_m += haversine_m(lats[i-1], lons[i-1], lats[i], lons[i])
+        dist_m += hav(track.lat.iloc[i-1], track.lon.iloc[i-1],
+                      track.lat.iloc[i],   track.lon.iloc[i])
     dist_km = dist_m / 1000.0
 
-    # --- compute duration (prefer datetime 'time'; else fall back to IGC time_s) ---
     duration_s = None
-    if "time" in track.columns and pd.to_datetime(track["time"], errors="coerce").notna().any():
-        tmin = pd.to_datetime(track["time"], errors="coerce").min()
-        tmax = pd.to_datetime(track["time"], errors="coerce").max()
-        if pd.notna(tmin) and pd.notna(tmax):
-            duration_s = (tmax - tmin).total_seconds()
-    if duration_s is None:
-        igc_copy = run_dir / f"{stem}.igc"
-        if igc_copy.exists():
-            try:
-                df_igc = parse_igc_brecords(igc_copy)
-                if len(df_igc):
-                    duration_s = float(df_igc["time_s"].iloc[-1] - df_igc["time_s"].iloc[0])
-            except Exception:
-                duration_s = None
-
-    def _fmt_hms(sec: Optional[float]) -> str:
-        if sec is None or not np.isfinite(sec) or sec <= 0:
-            return "n/a"
-        sec = int(round(sec))
-        h = sec // 3600
-        m = (sec % 3600) // 60
-        s = sec % 60
+    # prefer seconds from copied IGC (guaranteed to exist from pipeline)
+    igc_copy = run_dir / f"{stem}.igc"
+    if igc_copy.exists():
+        try:
+            _df_igc = parse_igc_brecords(igc_copy)
+            if len(_df_igc):
+                duration_s = float(_df_igc["time_s"].iloc[-1] - _df_igc["time_s"].iloc[0])
+        except Exception:
+            duration_s = None
+    def _fmt_hms(sec):
+        if sec is None or not np.isfinite(sec) or sec <= 0: return "n/a"
+        sec = int(round(sec)); h = sec//3600; m = (sec%3600)//60; s = sec%60
         return f"{h:02d}:{m:02d}:{s:02d}"
 
-    # --- figure & axes: map (top) + altitude profile (bottom) ---
+    # --- figure with two panels (map + altitude) ---
     fig, (ax_map, ax_alt) = plt.subplots(
         nrows=2, ncols=1, figsize=(9, 10),
-        gridspec_kw={'height_ratios': [2, 1]},  # map taller than profile
+        gridspec_kw={'height_ratios': [2, 1]},
         sharex=False
     )
 
-    # --- top panel: map ---
+    # --- top panel: track map ---
     ax_map.set_title(f"Glider Track & Clusters — {stem}")
-    ax_map.set_xlabel("Longitude")
-    ax_map.set_ylabel("Latitude")
+    ax_map.set_xlabel("Longitude"); ax_map.set_ylabel("Latitude")
 
     segs, is_climb = climb_segments(track)
     lc_sink  = LineCollection(segs[~is_climb], colors="#1E6EFF", linewidths=4.0, alpha=0.9)
     lc_climb = LineCollection(segs[ is_climb], colors="#FFD400", linewidths=4.0, alpha=0.95)
     ax_map.add_collection(lc_sink); ax_map.add_collection(lc_climb)
 
-    # extents
     ax_map.set_xlim(track["lon"].min() - 0.01, track["lon"].max() + 0.01)
     ax_map.set_ylim(track["lat"].min() - 0.01, track["lat"].max() + 0.01)
 
-    # overlays
+    # overlays: draw altitude clusters first (squares), then circle clusters (bigger circles)
     alt_df = read_clusters_xy(run_dir, "altitude_clusters.csv")
     if alt_df is not None and len(alt_df):
         ax_map.scatter(alt_df["lon"], alt_df["lat"], s=100, facecolors="none",
@@ -773,74 +773,92 @@ def render_one(stem: str, run_dir: Path, show: bool = True) -> None:
                        edgecolors="purple", marker="o", linewidths=2.4,
                        label="circle_clusters (purple ○)")
 
+    # matched positions (red ×) if present
     mfile = run_dir / "matched_clusters.csv"
     if mfile.exists():
-        m = pd.read_csv(mfile)
-        cols = {c.lower(): c for c in m.columns}
-        if "lat" in cols and "lon" in cols and len(m):
-            ax_map.scatter(pd.to_numeric(m[cols["lon"]], errors="coerce"),
-                           pd.to_numeric(m[cols["lat"]], errors="coerce"),
-                           s=300, color="red", marker="x", linewidths=2.8,
-                           label="matched (red ×)")
-
-    # --- mark start point ---
-    start_lat = track["lat"].iloc[0]
-    start_lon = track["lon"].iloc[0]
-    ax_map.scatter(start_lon, start_lat, marker="*", s=380,
-                   color="white", edgecolors="black", linewidths=2,
-                   zorder=10, label="start")
-
+        try:
+            m = pd.read_csv(mfile)
+            cols = {c.lower(): c for c in m.columns}
+            if "lat" in cols and "lon" in cols and len(m):
+                ax_map.scatter(pd.to_numeric(m[cols["lon"]], errors="coerce"),
+                               pd.to_numeric(m[cols["lat"]], errors="coerce"),
+                               s=300, color="red", marker="x", linewidths=2.8,
+                               label="matched (red ×)")
+        except Exception:
+            pass
 
     ax_map.legend(loc="best", frameon=True)
     ax_map.grid(True, linestyle=":", alpha=0.4)
 
-    # --- bottom panel: altitude profile ---
-    # x-axis: minutes since start (prefer 'time', then 'time_s', else sample index)
-    if "time" in track.columns and pd.to_datetime(track["time"], errors="coerce").notna().any():
-        tseries = pd.to_datetime(track["time"], errors="coerce")
-        t0 = tseries.min()
-        x_min = (tseries - t0).dt.total_seconds().to_numpy() / 60.0
-    elif "time_s" in track.columns:
-        x_min = track["time_s"].to_numpy() / 60.0
+    # --- bottom panel: altitude profile vs time (min) ---
+    # Always get time_s from the copied IGC to avoid NaT issues
+    x_min = None; y_alt = None
+    if igc_copy.exists():
+        try:
+            df_alt = parse_igc_brecords(igc_copy)
+            if not df_alt.empty:
+                x_min = df_alt["time_s"].to_numpy(dtype=float)/60.0
+                y_alt = df_alt["alt"].to_numpy(dtype=float)
+        except Exception:
+            x_min = None
+    if x_min is not None:
+        ax_alt.plot(x_min, y_alt, color="black", linewidth=1.6)
+        ax_alt.set_xlabel("Time (min)")
+        ax_alt.set_ylabel("Altitude (m)")
+        ax_alt.grid(True, linestyle=":", alpha=0.4)
     else:
-        x_min = np.arange(len(track), dtype=float) / 60.0  # assume 1 Hz if nothing else
+        # fallback: empty panel with label
+        ax_alt.set_xlabel("Time (min)")
+        ax_alt.set_ylabel("Altitude (m)")
+        ax_alt.text(0.5, 0.5, "No altitude timeline available", ha="center", va="center",
+                    transform=ax_alt.transAxes, alpha=0.7)
 
-    ax_alt.plot(x_min, track["alt"].to_numpy(), linewidth=1.3)
-    ax_alt.set_xlabel("Time (min)")
-    ax_alt.set_ylabel("Altitude (m)")
-    ax_alt.grid(True, linestyle=":", alpha=0.4)
+    # --- info box (bottom-right inside the overall figure) ---
+    pilot = igc_pilot_name(igc_copy) if igc_copy.exists() else "Unknown"
+    weglide_url = f"www.weglide.org/flight/{stem}"
 
-    # --- info box (bottom-right *inside* figure) ---
-    pilot = igc_pilot_name(run_dir / f"{stem}.igc")
-    weglide_url = f"https://www.weglide.org/flight/{stem}"
+    # counts of clusters (read CSVs written by pipeline)
+    n_circ = 0
+    n_altc = 0
+    try:
+        p_cc = run_dir / "circle_clusters_enriched.csv"
+        if p_cc.exists():
+            _cc = pd.read_csv(p_cc)
+            n_circ = int(len(_cc))
+    except Exception:
+        pass
+    try:
+        p_ac = run_dir / "altitude_clusters.csv"
+        if p_ac.exists():
+            _ac = pd.read_csv(p_ac)
+            n_altc = int(len(_ac))
+    except Exception:
+        pass
 
-    stats_txt = matched_summary_text(run_dir).replace(" | ", "\n")
+    # matched stats text (multi-line)
+    stats_txt = matched_summary_text(run_dir)  # make sure this returns multi-line already
 
     info_box = (
         f"Pilot: {pilot}\n"
+        f"Weglide: {weglide_url}\n"
         f"Distance: {dist_km:.1f} km\n"
         f"Duration: {_fmt_hms(duration_s)}\n"
-        f"Weglide: {weglide_url}\n"
+        f"Circle clusters: {n_circ}\n"
+        f"Altitude clusters: {n_altc}\n"
         f"{stats_txt}"
     )
 
-    # position slightly in from bottom-right so it doesn't clip
-    txt = fig.text(
-        0.965, 0.335, info_box,
-        ha="right", va="bottom",
-        fontsize=9, color="black",
-        bbox=dict(boxstyle="round,pad=0.35", fc="white", ec="0.6", alpha=0.9)
-    )
-    # make URL clickable in vector outputs (PNG viewers may ignore)
-    try:
-        txt.set_url(weglide_url)
-    except Exception:
-        pass
+    # nudge a bit inward so the box doesn’t clip
+    fig.text(0.965, 0.335, info_box,
+             ha="right", va="bottom",
+             fontsize=9, color="black",
+             bbox=dict(boxstyle="round,pad=0.35", fc="white", ec="0.6", alpha=0.9))
 
     plt.tight_layout()
     if show:
         plt.show()
     plt.close(fig)
+
 # ==================== MAIN ====================
 def main() -> int:
     ap = argparse.ArgumentParser()

@@ -757,6 +757,13 @@ def render_one(stem: str, run_dir: Path, show: bool = True) -> None:
     lc_climb = LineCollection(segs[ is_climb], colors="#FFD400", linewidths=4.0, alpha=0.95)
     ax_map.add_collection(lc_sink); ax_map.add_collection(lc_climb)
 
+    # --- mark start point with a star ---
+    start_lon, start_lat = track["lon"].iloc[0], track["lat"].iloc[0]
+    ax_map.scatter([start_lon], [start_lat],
+                   marker="*", color="white", s=300,
+                   edgecolors="black", linewidths=2.0,
+                   zorder=5, label="Start")
+
     ax_map.set_xlim(track["lon"].min() - 0.01, track["lon"].max() + 0.01)
     ax_map.set_ylim(track["lat"].min() - 0.01, track["lat"].max() + 0.01)
 
@@ -840,7 +847,7 @@ def render_one(stem: str, run_dir: Path, show: bool = True) -> None:
 
     info_box = (
         f"Pilot: {pilot}\n"
-        f"Weglide: {weglide_url}\n"
+        f"{weglide_url}\n"
         f"Distance: {dist_km:.1f} km\n"
         f"Duration: {_fmt_hms(duration_s)}\n"
         f"Circle clusters: {n_circ}\n"

@@ -1,0 +1,27 @@
+{
+  "min_total_heading_change": 360,
+  "circle_min_duration_s": 15.0,
+  "circle_max_duration_s": 32.0,
+  "circle_min_radius_m": 50.0,
+  "circle_max_radius_m": 200.0,
+  "circle_min_bank_deg": 25.0,
+  "circle_vmax_climb_ms": 5.0,
+
+  "alt_min_gain": 200,
+  "alt_min_duration": 10,
+
+  "circle_eps_m": 800,
+  "circle_min_samples": 3,
+
+  "match_max_dist_m": 5000,
+  "match_min_overlap": 0.1,
+
+
+  "match_group_eps_m": 10000,
+  "match_group_max_gap_s": 600,
+  "match_group_min_members": 1
+
+
+
+
+}

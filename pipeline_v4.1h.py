@@ -75,11 +75,11 @@ def matched_summary_text(run_dir: Path) -> str:
     mean_ovl  = stat("overlap_frac", fmt=".2f")
 
     return (f"matches: {n}\n"
+            f"overlap {mean_ovl}\n"
             f"climb_rate_ms mean {mean_cr} (p90 {p90_cr})\n"
             f"alt_gain_m mean {mean_gain}\n"
             f"dur_s mean {mean_dur}\n"
-            f"dist_m mean {mean_dist}\n"
-            f"overlap {mean_ovl}")
+            f"dist_m mean {mean_dist}\n")
 
 # Optional scikit-learn for DBSCAN
 try:
@@ -94,6 +94,20 @@ IGC_DIR  = ROOT / "igc"
 OUT_ROOT = ROOT / "outputs" / "batch_csv"
 TUNING_FILE = ROOT / "tuning.json"
 
+LAST_IGC_FILE = ROOT / ".last_igc"
+
+def _read_last_igc() -> Optional[Path]:
+    try:
+        p = Path(LAST_IGC_FILE.read_text(encoding="utf-8").strip())
+        return p if p.exists() else None
+    except Exception:
+        return None
+
+def _write_last_igc(p: Path) -> None:
+    try:
+        LAST_IGC_FILE.write_text(str(p.resolve()), encoding="utf-8")
+    except Exception:
+        pass
 def load_tuning() -> dict:
     defaults = {
         "circle_eps_m":       200.0,
@@ -571,6 +585,183 @@ def match_clusters(circle_clusters: pd.DataFrame,
     stats = {"pairs": int(len(df)), "max_dist_m": float(max_dist_m), "min_overlap_frac": float(min_overlap_frac)}
     return df, stats
 
+def build_thermals_space_only(matches: pd.DataFrame,
+                              eps_m: float = 10000.0,
+                              min_members: int = 1) -> pd.DataFrame:
+    """
+    Group matched circle↔alt pairs into thermals by *spatial* proximity only.
+    No temporal checks. Works across flights spanning years.
+    Returns one row per thermal with rolled-up stats.
+
+    Input columns expected in matches: lat, lon (required)
+    Optional roll-ups if present: alt_gain_m, climb_rate_ms,
+    circle_cluster_id, alt_cluster_id, t_start, t_end, duration_s
+    """
+    if matches.empty or not {"lat","lon"}.issubset({c.lower() for c in matches.columns}):
+        return pd.DataFrame(columns=[
+            "thermal_id","lat","lon","n_matches",
+            "alt_gain_m_sum","climb_rate_ms_mean",
+            "t_start","t_end","duration_s",
+            "circle_cluster_ids","alt_cluster_ids"
+        ])
+
+    M = matches.copy()
+    cols = {c.lower(): c for c in M.columns}
+    C = lambda k: cols.get(k, k)
+
+    # Pull numeric coords
+    lat = pd.to_numeric(M[C("lat")], errors="coerce").to_numpy()
+    lon = pd.to_numeric(M[C("lon")], errors="coerce").to_numpy()
+    idx = list(M.index)
+
+    # Union–find on spatial threshold
+    parent = {i: i for i in idx}
+    def find(a):
+        while parent[a] != a:
+            parent[a] = parent[parent[a]]
+            a = parent[a]
+        return a
+    def union(a, b):
+        ra, rb = find(a), find(b)
+        if ra != rb:
+            parent[rb] = ra
+
+    import math
+    def haversine_m(lat1, lon1, lat2, lon2):
+        R = 6371000.0
+        p1 = math.radians(lat1); p2 = math.radians(lat2)
+        dphi = p2 - p1; dl = math.radians(lon2 - lon1)
+        a = math.sin(dphi/2)**2 + math.cos(p1)*math.cos(p2)*math.sin(dl/2)**2
+        return 2*R*math.asin(math.sqrt(a))
+
+    for a in range(len(idx)):
+        for b in range(a+1, len(idx)):
+            ia, ib = idx[a], idx[b]
+            if np.isfinite(lat[a]) and np.isfinite(lat[b]) and \
+               haversine_m(lat[a], lon[a], lat[b], lon[b]) <= eps_m:
+                union(ia, ib)
+
+    # Collect groups
+    groups = {}
+    for i in idx:
+        groups.setdefault(find(i), []).append(i)
+
+    rows, tid = [], 0
+    for root, members in groups.items():
+        if len(members) < min_members:
+            continue
+        sub = M.loc[members]
+        lat_mean = float(pd.to_numeric(sub[C("lat")], errors="coerce").mean())
+        lon_mean = float(pd.to_numeric(sub[C("lon")], errors="coerce").mean())
+
+        # Optional roll-ups if present
+        alt_gain_sum = float(pd.to_numeric(sub.get(C("alt_gain_m"), pd.Series()),
+                                           errors="coerce").sum(skipna=True))
+        cr_mean = float(pd.to_numeric(sub.get(C("climb_rate_ms"), pd.Series()),
+                                      errors="coerce").mean(skipna=True))
+
+        # Best-effort time span (safe even across years; ok if NaN)
+        if C("t_start") in sub.columns and C("t_end") in sub.columns:
+            t_start = float(pd.to_numeric(sub[C("t_start")], errors="coerce").min())
+            t_end   = float(pd.to_numeric(sub[C("t_end")],   errors="coerce").max())
+            duration = (t_end - t_start) if (np.isfinite(t_end) and np.isfinite(t_start)) else float("nan")
+        else:
+            t_start = t_end = duration = float("nan")
+
+        circle_ids = sorted(set(pd.to_numeric(sub.get(C("circle_cluster_id"), pd.Series()),
+                                             errors="coerce").dropna().astype(int).tolist()))
+        alt_ids    = sorted(set(pd.to_numeric(sub.get(C("alt_cluster_id"), pd.Series()),
+                                             errors="coerce").dropna().astype(int).tolist()))
+
+        rows.append({
+            "thermal_id": tid,
+            "lat": lat_mean, "lon": lon_mean,
+            "n_matches": int(len(sub)),
+            "alt_gain_m_sum": alt_gain_sum,
+            "climb_rate_ms_mean": cr_mean,
+            "t_start": t_start, "t_end": t_end, "duration_s": duration,
+            "circle_cluster_ids": ",".join(map(str, circle_ids)) if circle_ids else "",
+            "alt_cluster_ids":    ",".join(map(str, alt_ids))    if alt_ids else "",
+        })
+        tid += 1
+
+    out_cols = ["thermal_id","lat","lon","n_matches",
+                "alt_gain_m_sum","climb_rate_ms_mean",
+                "t_start","t_end","duration_s",
+                "circle_cluster_ids","alt_cluster_ids"]
+    out = pd.DataFrame(rows)
+    return out[out_cols].sort_values("thermal_id").reset_index(drop=True)
+
+def nearest_neighbor_distances_m(df, lat_key="lat", lon_key="lon"):
+    """Return list of nearest-neighbor distances (meters) for each row in df."""
+    if df is None or df.empty or lat_key not in df.columns or lon_key not in df.columns:
+        return []
+    lat = pd.to_numeric(df[lat_key], errors="coerce").to_numpy()
+    lon = pd.to_numeric(df[lon_key], errors="coerce").to_numpy()
+    n = len(lat)
+    out = []
+    for i in range(n):
+        if not (np.isfinite(lat[i]) and np.isfinite(lon[i])):
+            continue
+        best = float("inf")
+        for j in range(n):
+            if i == j:
+                continue
+            if not (np.isfinite(lat[j]) and np.isfinite(lon[j])):
+                continue
+            d = haversine_m(lat[i], lon[i], lat[j], lon[j])
+            if d < best:
+                best = d
+        if math.isfinite(best) and best < float("inf"):
+            out.append(best)
+    return out
+
+def summarize_nn_dists_m(dists):
+    """Summarize nearest-neighbor distances into key percentiles."""
+    if not dists:
+        return {}
+    arr = np.array(dists, dtype=float)
+    return {
+        "count": int(arr.size),
+        "min_m": float(np.min(arr)),
+        "median_m": float(np.median(arr)),
+        "mean_m": float(np.mean(arr)),
+        "p90_m": float(np.percentile(arr, 90)),
+        "p95_m": float(np.percentile(arr, 95)),
+        "max_m": float(np.max(arr)),
+    }
+
+'''
+# suggest eps from matches
+def suggest_eps_from_matches(matches: pd.DataFrame, percentiles=(80, 85, 90, 95)) -> dict:
+    if matches.empty or not {"lat","lon"}.issubset({c.lower() for c in matches.columns}):
+        return {}
+    M = matches.copy()
+    cols = {c.lower(): c for c in M.columns}; C = lambda k: cols[k]
+    lat = pd.to_numeric(M[C("lat")], errors="coerce").to_numpy()
+    lon = pd.to_numeric(M[C("lon")], errors="coerce").to_numpy()
+
+    import math
+    def haversine_m(lat1, lon1, lat2, lon2):
+        R = 6371000.0
+        p1 = math.radians(lat1); p2 = math.radians(lat2)
+        dphi = p2 - p1; dl = math.radians(lon2 - lon1)
+        a = math.sin(dphi/2)**2 + math.cos(p1)*math.cos(p2)*math.sin(dl/2)**2
+        return 2*R*math.asin(math.sqrt(a))
+
+    dmin = []
+    for i in range(len(lat)):
+        best = float("inf")
+        for j in range(len(lat)):
+            if i == j: continue
+            d = haversine_m(lat[i], lon[i], lat[j], lon[j])
+            if d < best: best = d
+        if math.isfinite(best): dmin.append(best)
+    if not dmin: return {}
+
+    arr = np.array(dmin, dtype=float)
+    return {f"p{p}": float(np.percentile(arr, p)) for p in percentiles}
+'''
 # -------------------- Ensure IGC copy into run_dir --------------------
 import shutil, gzip
 
@@ -679,111 +870,170 @@ def matched_summary_text(run_dir: Path) -> str:
         if not c: return "n/a"
         v = pd.to_numeric(m[c], errors="coerce").dropna()
         return format(fn(v), fmt) if len(v) else "n/a"
-    return (f"matches: {n} | climb_rate_ms mean {stat('climb_rate_ms')} "
-            f"(p90 {stat('climb_rate_ms', fn=lambda s: np.percentile(s,90))}) | "
-            f"alt_gain_m mean {stat('alt_gain_m')} | dur_s mean {stat('duration_s')} | "
-            f"dist_m mean {stat('dist_m')} | overlap {stat('overlap_frac', fmt='.2f')}")
+
+    return (
+        f"matched clusters: {n}\n"
+        f"overlap mean {stat('overlap_frac', fmt='.2f')}\n"
+        f"dur_s mean {stat('duration_s')}\n"
+        f"dist_m mean {stat('dist_m')}\n"
+        f"alt_gain_m mean {stat('alt_gain_m')}\n"
+        f"climb_rate_ms mean {stat('climb_rate_ms')}\n"
+        f"(p90 {stat('climb_rate_ms', fn=lambda s: np.percentile(s, 90))})"
+
+    )
 
 def render_one(stem: str, run_dir: Path, show: bool = True) -> None:
-    # --- load track (as your helper already does) ---
+    # --- load track for map panel ---
     track = load_track_for_plot(run_dir, stem)
     if len(track) < 2:
         print(f"[PLOT] skip {stem}: <2 points")
         return
 
-    # --- compute total distance (km) from lat/lon ---
-    lats = track["lat"].to_numpy()
-    lons = track["lon"].to_numpy()
+    # --- compute flight distance (km) & duration (hh:mm:ss) ---
+    def hav(lat1, lon1, lat2, lon2):
+        R = 6371008.8
+        import math
+        p1 = math.radians(lat1); p2 = math.radians(lat2)
+        dphi = p2 - p1; dl = math.radians(lon2 - lon1)
+        a = math.sin(dphi/2)**2 + math.cos(p1)*math.cos(p2)*math.sin(dl/2)**2
+        return 2*R*math.asin(math.sqrt(a))
     dist_m = 0.0
     for i in range(1, len(track)):
-        dist_m += haversine_m(lats[i-1], lons[i-1], lats[i], lons[i])
+        dist_m += hav(track.lat.iloc[i-1], track.lon.iloc[i-1],
+                      track.lat.iloc[i],   track.lon.iloc[i])
     dist_km = dist_m / 1000.0
 
-    # --- compute duration (prefer datetime 'time'; else fall back to IGC time_s) ---
     duration_s = None
-    if "time" in track.columns and pd.to_datetime(track["time"], errors="coerce").notna().any():
-        tmin = pd.to_datetime(track["time"], errors="coerce").min()
-        tmax = pd.to_datetime(track["time"], errors="coerce").max()
-        if pd.notna(tmin) and pd.notna(tmax):
-            duration_s = (tmax - tmin).total_seconds()
-    if duration_s is None:
-        igc_copy = run_dir / f"{stem}.igc"
-        if igc_copy.exists():
-            try:
-                df_igc = parse_igc_brecords(igc_copy)
-                if len(df_igc):
-                    duration_s = float(df_igc["time_s"].iloc[-1] - df_igc["time_s"].iloc[0])
-            except Exception:
-                duration_s = None
-
-    def _fmt_hms(sec: Optional[float]) -> str:
-        if sec is None or not np.isfinite(sec) or sec <= 0:
-            return "n/a"
-        sec = int(round(sec))
-        h = sec // 3600
-        m = (sec % 3600) // 60
-        s = sec % 60
+    # prefer seconds from copied IGC (guaranteed to exist from pipeline)
+    igc_copy = run_dir / f"{stem}.igc"
+    if igc_copy.exists():
+        try:
+            _df_igc = parse_igc_brecords(igc_copy)
+            if len(_df_igc):
+                duration_s = float(_df_igc["time_s"].iloc[-1] - _df_igc["time_s"].iloc[0])
+        except Exception:
+            duration_s = None
+    def _fmt_hms(sec):
+        if sec is None or not np.isfinite(sec) or sec <= 0: return "n/a"
+        sec = int(round(sec)); h = sec//3600; m = (sec%3600)//60; s = sec%60
         return f"{h:02d}:{m:02d}:{s:02d}"
 
-    # --- figure & axes ---
-    fig, ax = plt.subplots(figsize=(9, 8))
-    ax.set_title(f"Glider Track & Clusters — {stem}")
-    ax.set_xlabel("Longitude"); ax.set_ylabel("Latitude")
+    # --- figure with two panels (map + altitude) ---
+    fig, (ax_map, ax_alt) = plt.subplots(
+        nrows=2, ncols=1, figsize=(9, 10),
+        gridspec_kw={'height_ratios': [2, 1]},
+        sharex=False
+    )
 
-    # track segments (thick)
+    # --- top panel: track map ---
+    ax_map.set_title(f"Glider Track & Clusters — {stem}")
+    ax_map.set_xlabel("Longitude"); ax_map.set_ylabel("Latitude")
+
     segs, is_climb = climb_segments(track)
     lc_sink  = LineCollection(segs[~is_climb], colors="#1E6EFF", linewidths=4.0, alpha=0.9)
     lc_climb = LineCollection(segs[ is_climb], colors="#FFD400", linewidths=4.0, alpha=0.95)
-    ax.add_collection(lc_sink); ax.add_collection(lc_climb)
+    ax_map.add_collection(lc_sink); ax_map.add_collection(lc_climb)
 
-    # extents
-    ax.set_xlim(track["lon"].min() - 0.01, track["lon"].max() + 0.01)
-    ax.set_ylim(track["lat"].min() - 0.01, track["lat"].max() + 0.01)
+    # --- mark start point with a star ---
+    start_lon, start_lat = track["lon"].iloc[0], track["lat"].iloc[0]
+    ax_map.scatter([start_lon], [start_lat],
+                   marker="*", color="white", s=300,
+                   edgecolors="black", linewidths=2.0,
+                   zorder=5, label="Start")
 
-    # overlays
+    ax_map.set_xlim(track["lon"].min() - 0.01, track["lon"].max() + 0.01)
+    ax_map.set_ylim(track["lat"].min() - 0.01, track["lat"].max() + 0.01)
+
+    # overlays: draw altitude clusters first (squares), then circle clusters (bigger circles)
     alt_df = read_clusters_xy(run_dir, "altitude_clusters.csv")
     if alt_df is not None and len(alt_df):
-        ax.scatter(alt_df["lon"], alt_df["lat"], s=100, facecolors="none",
-                   edgecolors="green", marker="s", linewidths=2.2,
-                   label="altitude_clusters (green □)")
+        ax_map.scatter(alt_df["lon"], alt_df["lat"], s=100, facecolors="none",
+                       edgecolors="green", marker="s", linewidths=2.2,
+                       label="altitude_clusters (green □)")
 
     circle_df = read_clusters_xy(run_dir, "circle_clusters_enriched.csv")
     if circle_df is not None and len(circle_df):
-        ax.scatter(circle_df["lon"], circle_df["lat"], s=200, facecolors="none",
-                   edgecolors="purple", marker="o", linewidths=2.4,
-                   label="circle_clusters (purple ○)")
+        ax_map.scatter(circle_df["lon"], circle_df["lat"], s=200, facecolors="none",
+                       edgecolors="purple", marker="o", linewidths=2.4,
+                       label="circle_clusters (purple ○)")
 
+    # matched positions (red ×) if present
     mfile = run_dir / "matched_clusters.csv"
     if mfile.exists():
-        m = pd.read_csv(mfile)
-        cols = {c.lower(): c for c in m.columns}
-        if "lat" in cols and "lon" in cols and len(m):
-            ax.scatter(pd.to_numeric(m[cols["lon"]], errors="coerce"),
-                       pd.to_numeric(m[cols["lat"]], errors="coerce"),
-                       s=300, color="red", marker="x", linewidths=2.8,
-                       label="matched (red ×)")
+        try:
+            m = pd.read_csv(mfile)
+            cols = {c.lower(): c for c in m.columns}
+            if "lat" in cols and "lon" in cols and len(m):
+                ax_map.scatter(pd.to_numeric(m[cols["lon"]], errors="coerce"),
+                               pd.to_numeric(m[cols["lat"]], errors="coerce"),
+                               s=300, color="red", marker="x", linewidths=2.8,
+                               label="matched (red ×)")
+        except Exception:
+            pass
 
-    ax.legend(loc="best", frameon=True)
-    ax.grid(True, linestyle=":", alpha=0.4)
+    ax_map.legend(loc="best", frameon=True)
+    ax_map.grid(True, linestyle=":", alpha=0.4)
 
-    # --- info box (bottom-right *inside* figure) ---
-    pilot = igc_pilot_name(run_dir / f"{stem}.igc")
-    weglide_url = f"https://www.weglide.org/flight/{stem}"
+    # --- bottom panel: altitude profile vs time (min) ---
+    # Always get time_s from the copied IGC to avoid NaT issues
+    x_min = None; y_alt = None
+    if igc_copy.exists():
+        try:
+            df_alt = parse_igc_brecords(igc_copy)
+            if not df_alt.empty:
+                x_min = df_alt["time_s"].to_numpy(dtype=float)/60.0
+                y_alt = df_alt["alt"].to_numpy(dtype=float)
+        except Exception:
+            x_min = None
+    if x_min is not None:
+        ax_alt.plot(x_min, y_alt, color="black", linewidth=1.6)
+        ax_alt.set_xlabel("Time (min)")
+        ax_alt.set_ylabel("Altitude (m)")
+        ax_alt.grid(True, linestyle=":", alpha=0.4)
+    else:
+        # fallback: empty panel with label
+        ax_alt.set_xlabel("Time (min)")
+        ax_alt.set_ylabel("Altitude (m)")
+        ax_alt.text(0.5, 0.5, "No altitude timeline available", ha="center", va="center",
+                    transform=ax_alt.transAxes, alpha=0.7)
 
-    # make matched stats multiline (convert " | " to newlines if needed)
-    stats_txt = matched_summary_text(run_dir)
-    stats_txt = stats_txt.replace(" | ", "\n")
+    # --- info box (bottom-right inside the overall figure) ---
+    pilot = igc_pilot_name(igc_copy) if igc_copy.exists() else "Unknown"
+    weglide_url = f"www.weglide.org/flight/{stem}"
+
+    # counts of clusters (read CSVs written by pipeline)
+    n_circ = 0
+    n_altc = 0
+    try:
+        p_cc = run_dir / "circle_clusters_enriched.csv"
+        if p_cc.exists():
+            _cc = pd.read_csv(p_cc)
+            n_circ = int(len(_cc))
+    except Exception:
+        pass
+    try:
+        p_ac = run_dir / "altitude_clusters.csv"
+        if p_ac.exists():
+            _ac = pd.read_csv(p_ac)
+            n_altc = int(len(_ac))
+    except Exception:
+        pass
+
+    # matched stats text (multi-line)
+    stats_txt = matched_summary_text(run_dir)  # make sure this returns multi-line already
 
     info_box = (
         f"Pilot: {pilot}\n"
+        f"{weglide_url}\n"
         f"Distance: {dist_km:.1f} km\n"
         f"Duration: {_fmt_hms(duration_s)}\n"
-        f"Weglide: {weglide_url}\n"
+        f"Circle clusters: {n_circ}\n"
+        f"Altitude clusters: {n_altc}\n"
         f"{stats_txt}"
     )
 
-    # Position slightly in from the bottom-right so it doesn't clip
-    fig.text(0.965, 0.035, info_box,
+    # nudge a bit inward so the box doesn’t clip
+    fig.text(0.965, 0.335, info_box,
              ha="right", va="bottom",
              fontsize=9, color="black",
              bbox=dict(boxstyle="round,pad=0.35", fc="white", ec="0.6", alpha=0.9))
@@ -792,28 +1042,83 @@ def render_one(stem: str, run_dir: Path, show: bool = True) -> None:
     if show:
         plt.show()
     plt.close(fig)
+
+import math
+
+def _haversine_m(lat1, lon1, lat2, lon2):
+    R = 6371000.0
+    p1 = math.radians(lat1); p2 = math.radians(lat2)
+    dphi = p2 - p1; dl = math.radians(lon2 - lon1)
+    a = math.sin(dphi/2)**2 + math.cos(p1)*math.cos(p2)*math.sin(dl/2)**2
+    return 2*R*math.asin(math.sqrt(a))
+
+def nearest_neighbor_distances_m(df, lat_key="lat", lon_key="lon"):
+    """Return a list of each point’s nearest-neighbor distance (meters)."""
+    if df is None or df.empty or lat_key not in df.columns or lon_key not in df.columns:
+        return []
+    lat = pd.to_numeric(df[lat_key], errors="coerce").to_numpy()
+    lon = pd.to_numeric(df[lon_key], errors="coerce").to_numpy()
+    n = len(lat)
+    out = []
+    for i in range(n):
+        if not (np.isfinite(lat[i]) and np.isfinite(lon[i])):
+            continue
+        best = float("inf")
+        for j in range(n):
+            if i == j:
+                continue
+            if not (np.isfinite(lat[j]) and np.isfinite(lon[j])):
+                continue
+            d = _haversine_m(lat[i], lon[i], lat[j], lon[j])
+            if d < best:
+                best = d
+        if math.isfinite(best) and best < float("inf"):
+            out.append(best)
+    return out
+
+def summarize_nn_dists_m(dists):
+    """Return dict of summary stats (meters)."""
+    if not dists:
+        return {}
+    arr = np.array(dists, dtype=float)
+    return {
+        "count": int(arr.size),
+        "min_m": float(np.min(arr)),
+        "median_m": float(np.median(arr)),
+        "mean_m": float(np.mean(arr)),
+        "p90_m": float(np.percentile(arr, 90)),
+        "p95_m": float(np.percentile(arr, 95)),
+        "max_m": float(np.max(arr)),
+    }
 # ==================== MAIN ====================
 def main() -> int:
     ap = argparse.ArgumentParser()
     ap.add_argument("igc", nargs="?", help="Path to IGC file (absolute, or just the filename under ./igc)")
     args = ap.parse_args()
 
-    # Resolve IGC path
+    # Resolve IGC path (remember last selection)
+    last_igc = _read_last_igc()
     if args.igc:
         cand = Path(args.igc).expanduser()
         igc_path = cand if cand.is_absolute() else (IGC_DIR / cand.name)
     else:
-        user_in = input("Enter IGC filename in ./igc (required, no default): ").strip()
+        default_hint = f" [default: {last_igc}]" if last_igc else ""
+        user_in = input(f"Enter IGC filename in ./igc{default_hint}: ").strip()
         if not user_in:
-            print("[ERROR] No filename entered.", file=sys.stderr)
-            return 2
-        cand = Path(user_in).expanduser()
-        igc_path = cand if cand.is_absolute() else (IGC_DIR / cand.name)
+            if last_igc is None:
+                print("[ERROR] No filename entered, and no previous selection to use.", file=sys.stderr)
+                return 2
+            igc_path = last_igc
+        else:
+            cand = Path(user_in).expanduser()
+            igc_path = cand if cand.is_absolute() else (IGC_DIR / cand.name)
 
     if not igc_path.exists():
         print(f"[ERROR] IGC not found: {igc_path}", file=sys.stderr)
         return 2
 
+    # Remember for next run
+    _write_last_igc(igc_path)
     # Load tuning
     cfg = load_tuning()
     circle_eps_m       = float(cfg["circle_eps_m"])
@@ -856,6 +1161,7 @@ def main() -> int:
         track = track.iloc[tow_end_idx + 1:].reset_index(drop=True)
         logf_write(logf, f"[INFO] Tow cut at idx={tow_end_idx}, samples left={len(track)}")
         print(f"[INFO] Tow cut at idx={tow_end_idx}, samples left={len(track)}")
+        print()
 
     # 2) Circles
     circles = detect_circles(track)
@@ -912,6 +1218,22 @@ def main() -> int:
         max_dist_m=match_max_dist_m,
         min_overlap_frac=match_min_overlap,
     )
+    '''
+    print()
+    print("[TUNE] eps suggestions (m):", suggest_eps_from_matches(matches))
+    print()
+    '''
+
+    # matches already computed
+    group_eps_m = float(cfg.get("match_group_eps_m", 10000.0))  # <— tune this
+    group_min = int(cfg.get("match_group_min_members", 1))
+
+    thermals = build_thermals_space_only(matches, eps_m=group_eps_m, min_members=group_min)
+    thermals_csv = run_dir / "grouped_matches.csv"
+    thermals.to_csv(thermals_csv, index=False)
+
+    #print(f"[SUMMARY] matches={len(matches)}, thermals={len(thermals)} (→ {thermals_csv})")
+
     match_cols = [
         "lat","lon","climb_rate_ms","alt_gain_m","duration_s",
         "circle_cluster_id","alt_cluster_id",
@@ -924,6 +1246,18 @@ def main() -> int:
         matches = matches.reindex(columns=match_cols)
     match_csv  = run_dir / "matched_clusters.csv"
     matches.to_csv(match_csv, index=False)
+
+    nn = nearest_neighbor_distances_m(matches)
+    stats = summarize_nn_dists_m(nn)
+    if stats:
+        print("[NN] nearest-neighbor distances (meters): "
+              f"min={stats['min_m']:.0f}, median={stats['median_m']:.0f}, "
+              f"mean={stats['mean_m']:.0f}, p90={stats['p90_m']:.0f}, "
+              f"p95={stats['p95_m']:.0f}, max={stats['max_m']:.0f}")
+        pd.Series(nn, name="nn_distance_m").to_csv(run_dir / "nn_distances_m.csv", index=False)
+    else:
+        print("[NN] nearest-neighbor distances: (n/a)")
+    print()
 
     # Summary JSON
     payload = {"stats": stats, "rows": int(len(matches))}
@@ -941,8 +1275,10 @@ def main() -> int:
     (run_dir / "matched_clusters.json").write_text(json.dumps(payload, indent=2), encoding="utf-8")
 
     # Quick console summary
-    print(f"[SUMMARY] circles={len(circles)}, circle_clusters={len(cc)}, altitude_clusters={len(alts)}, matched={len(matches)}")
+    print(f"[SUMMARY] circles={len(circles)}, circle_clusters={len(cc)}, altitude_clusters={len(alts)}, matched={len(matches)}, thermals={len(thermals)}")
     logf_write(logf, f"[OK] wrote matches={len(matches)}")
+    print()
+    print(f"(→ {thermals_csv})")
 
     # -------- Render plot (show only; no save) --------
     try:

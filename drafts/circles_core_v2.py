@@ -402,7 +402,7 @@ def main():
     logf = open(f"circles_core_{ts}.txt", "w")
     sys.stdout = sys.stderr = Tee(sys.stdout, logf)
 
-    igc_path = "2020-11-08 Lumpy Paterson 108645.igc"
+    igc_path = "2020-11-08 Lumpy Paterson 108645.igc_subset"
     print(f"[circles-core] Parsing IGC: {igc_path}")
     df = parse_igc(igc_path)
     if df.empty:

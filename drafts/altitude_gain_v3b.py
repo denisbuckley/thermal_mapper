@@ -299,7 +299,7 @@ def main():
     logf = open(f"altitude_gain_{ts}.txt", "w")
     sys.stdout = sys.stderr = Tee(sys.stdout, logf)
 
-    path = "2020-11-08 Lumpy Paterson 108645.igc"  # hard-coded for PyCharm
+    path = "2020-11-08 Lumpy Paterson 108645.igc_subset"  # hard-coded for PyCharm
     print(f"[alt v3b] Parsing IGC: {path}")
     df = parse_igc(path)
     if len(df) == 0:

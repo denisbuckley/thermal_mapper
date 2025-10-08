@@ -311,8 +311,8 @@ def main():
     ax.set_title(f"Glider Track & Clusters — {stem}")
     ax.set_xlabel("Longitude"); ax.set_ylabel("Latitude")
 
-    lc_sink  = LineCollection(segs[~is_climb], colors="#1E6EFF", linewidths=1.0, alpha=0.9)   # blue
-    lc_climb = LineCollection(segs[ is_climb], colors="#FFD400", linewidths=1.4, alpha=0.95)  # yellow
+    lc_sink = LineCollection(segs[~is_climb], colors="#1E6EFF", linewidths=3.2, alpha=0.9)  # blue much thicker
+    lc_climb = LineCollection(segs[is_climb], colors="#FFD400", linewidths=4.0, alpha=0.95)  # yellow much thicker
     ax.add_collection(lc_sink); ax.add_collection(lc_climb)
 
     # sensible extents
@@ -322,20 +322,19 @@ def main():
     # Cluster overlays
     circle_df = read_clusters(dir_path, "circle_clusters_enriched.csv")
     if circle_df is not None and len(circle_df):
-        ax.scatter(circle_df["lon"], circle_df["lat"], s=30, facecolors="none",
-                   edgecolors="green", marker="o", linewidths=1.6,
-                   label="circle_clusters (green ○)")
+        ax.scatter(circle_df["lon"], circle_df["lat"], s=200, facecolors="none",
+                   edgecolors="red", marker="o", linewidths=2.2,
+                   label="circle_clusters (purple ○)")
 
     alt_df = read_clusters(dir_path, "altitude_clusters.csv")
-    if alt_df is not None and len(alt_df):
-        ax.scatter(alt_df["lon"], alt_df["lat"], s=35, facecolors="none",
-                   edgecolors="green", marker="s", linewidths=1.6,
-                   label="altitude_clusters (green □)")
+    ax.scatter(alt_df["lon"], alt_df["lat"], s=80, facecolors="none",
+               edgecolors="green", marker="s", linewidths=2.0,
+               label="altitude_clusters (green □)")
 
-    m = matched_positions(circle_df, alt_df, dir_path)
+    '''m = matched_positions(circle_df, alt_df, dir_path)
     if m is not None and len(m):
         ax.scatter(m["lon"], m["lat"], s=70, color="red", marker="x",
-                   linewidths=2.0, label="matched (red ×)")
+                   linewidths=2.0, label="matched (red ×)")'''
 
     ax.legend(loc="best", frameon=True)
     ax.grid(True, linestyle=":", alpha=0.4)

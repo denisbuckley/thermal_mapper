@@ -184,7 +184,7 @@ def main():
     sys.stdout = sys.stderr = Tee(sys.stdout, logf)
 
     # Hard-coded path for PyCharm run
-    path = "2020-11-08 Lumpy Paterson 108645.igc"
+    path = "2020-11-08 Lumpy Paterson 108645.igc_subset"
     print(f"[alt v2] Parsing IGC: {path}")
     df = parse_igc(path)
     if len(df) == 0:

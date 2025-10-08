@@ -162,7 +162,7 @@ def save_interactive_html(igc_path: Path, out_html: Path) -> None:
         fig.add_trace(
             go.Scattergl(
                 x=alts["lon"], y=alts["lat"], mode="markers",
-                marker=dict(symbol="square-open", size=10, line=dict(width=2, color="green")),
+                marker=dict(symbol="square-open", size=22, color="green"),
                 name="altitude_clusters"
             ),
             row=1, col=1
@@ -171,7 +171,7 @@ def save_interactive_html(igc_path: Path, out_html: Path) -> None:
         fig.add_trace(
             go.Scattergl(
                 x=circles["lon"], y=circles["lat"], mode="markers",
-                marker=dict(symbol="circle-open", size=12, line=dict(width=2, color="purple")),
+                marker=dict(symbol="circle-open", size=20, color='black'),
                 name="circle_clusters"
             ),
             row=1, col=1
@@ -181,7 +181,7 @@ def save_interactive_html(igc_path: Path, out_html: Path) -> None:
         fig.add_trace(
             go.Scattergl(
                 x=matched["lon"], y=matched["lat"], mode="markers",
-                marker=dict(symbol="x", size=12, color="red"),
+                marker=dict(symbol="x", size=15, color="red"),
                 name="matched (red ×)"
             ),
             row=1, col=1
@@ -190,13 +190,13 @@ def save_interactive_html(igc_path: Path, out_html: Path) -> None:
     # Cursor markers (updated via JS)
     fig.add_trace(
         go.Scattergl(x=[], y=[], mode="markers",
-                     marker=dict(color="red", size=10),
+                     marker=dict(color="blue", size=10),
                      name="cursor_map"),
         row=1, col=1
     )
     fig.add_trace(
         go.Scattergl(x=[], y=[], mode="markers",
-                     marker=dict(color="red", size=10),
+                     marker=dict(color="blue", size=10),
                      name="cursor_alt"),
         row=2, col=1
     )

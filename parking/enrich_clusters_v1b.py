@@ -18,7 +18,7 @@ from datetime import datetime, timezone
 import numpy as np
 import pandas as pd
 
-DEFAULT_IGC = "2020-11-08 Lumpy Paterson 108645.igc"
+DEFAULT_IGC = "2020-11-08 Lumpy Paterson 108645.igc_subset"
 OUTPUTS_DIR = "outputs"
 
 # Optional igc_utils

@@ -30,10 +30,10 @@ circles_debug_*.txt
 drafts/
 
 # Ignore local flight logs
-igc/*
+igc_subset/*
 
 # Ignore local flight logs
-igc/*
+igc_subset/*
 
 # data inputs
-igc_all/
+igc/

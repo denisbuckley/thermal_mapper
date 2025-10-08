@@ -14,11 +14,11 @@ Outputs (written to ./outputs):
 
 Also prints a parameter banner so screenshots carry the tuning used.
 
-Author: chatgpt-igc compare v2f
+Author: chatgpt-igc_subset compare v2f
 """
 
 # --------------------------- USER SETTINGS ---------------------------
-DEFAULT_IGC = "2020-11-08 Lumpy Paterson 108645.igc"
+DEFAULT_IGC = "2020-11-08 Lumpy Paterson 108645.igc_subset"
 
 # Circle detection params (aligned with overlay v1k)
 C_SMOOTH_S         = 3.0

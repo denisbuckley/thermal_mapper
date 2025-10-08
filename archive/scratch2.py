@@ -16,7 +16,7 @@ Stages:
 5) Thermals (circling) → circle detection + continuity + thresholds
 6) Outputs → console summary + plot (track=light green, sustained=red, thermals=black x)
 
-Run: python igc_thermal_modular.py /path/to/file.igc
+Run: python igc_thermal_modular.py /path/to/file.igc_subset
 Dependencies: numpy, pandas, matplotlib
 """
 from __future__ import annotations
@@ -32,7 +32,7 @@ import matplotlib.pyplot as plt
 # =========================
 # 0) Config / Defaults
 # =========================
-DEFAULT_IGC_PATH = "2020-11-08 Lumpy Paterson 108645.igc"
+DEFAULT_IGC_PATH = "2020-11-08 Lumpy Paterson 108645.igc_subset"
 
 # Tow detection
 TOW_MIN_ALT_GAIN_M = 457.0            # 1500 ft

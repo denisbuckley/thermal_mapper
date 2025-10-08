@@ -92,6 +92,14 @@ def filter_inputs(df, strength_min, dstart, dend, logfh):
     for c in need:
         if c not in df.columns: raise ValueError(f"Missing col: {c}")
     df2=df[df["climb_rate_ms"]>=strength_min].copy()
+
+    # Drop absurd climb spikes/drops (units: m/s). Adjust if needed.
+    pre = len(df2)
+    df2 = df2[df2["climb_rate_ms"].between(-5.0, 10.0)]
+    dropped = pre - len(df2)
+    if dropped:
+        log(f"[CLEAN] dropped {dropped} outliers outside [-5, 10] m/s", logfh)
+
     log(f"Strength filter ≥{strength_min}: {len(df)}→{len(df2)}", logfh)
     df2=df2.dropna(subset=["lat","lon"])
     return df2.reset_index(drop=True)
@@ -218,34 +226,68 @@ def main():
             log("=== done ===", lf)
             return 0
 
+        # 🔍 Debug: check climb_rate_ms distribution
+        print(df["climb_rate_ms"].describe())
+        print(df["climb_rate_ms"].head(20))
+
         # 3) cluster using the RESOLVED values
         labels = run_dbscan_haversine(df.lat, df.lon, eps_km, min_samples)
         out, lab_to_wp = aggregate_clusters(df, labels, method, eps_km, min_samples, strength_min)
         log(f"Clusters: {len(out)}", lf)
 
-        # --- cluster membership summary ---
-        cluster_sizes = pd.Series(labels)[labels >= 0].value_counts().sort_index()
-        for cid, size in cluster_sizes.items():
-            log(f"  Cluster {cid}: {size} points", lf)
+        # 3) cluster using the RESOLVED values (run ONCE)
+        labels = run_dbscan_haversine(df.lat, df.lon, eps_km, min_samples)
+        out, lab_to_wp = aggregate_clusters(df, labels, method, eps_km, min_samples, strength_min)
+        log(f"Clusters: {len(out)}", lf)
 
-        # optional: report average size
+        # --- diagnostics on clustering ---
+        total_pts   = len(labels)
+        clustered_n = int((np.array(labels) >= 0).sum())
+        noise_n     = total_pts - clustered_n
+        uniq_labels = sorted({int(x) for x in labels if x >= 0})
+        log(f"[DIAG] points total={total_pts}, clustered={clustered_n}, noise={noise_n}, unique_clusters={len(uniq_labels)}", lf)
+
+        # --- membership mapping (each matched point → wp_id) ---
+        members = []
+        if not out.empty and lab_to_wp and clustered_n > 0:
+            # ensure __source_file exists
+            if "__source_file" not in df.columns:
+                df["__source_file"] = ""
+
+            for idx, lbl in enumerate(labels):
+                if lbl < 0:
+                    continue  # skip noise
+                wp_id = lab_to_wp.get(int(lbl))
+                if wp_id is None:
+                    continue
+                members.append({
+                    "lat": float(df.lat.iloc[idx]),
+                    "lon": float(df.lon.iloc[idx]),
+                    "climb_rate_ms": float(df.climb_rate_ms.iloc[idx]),
+                    "cluster_label": int(lbl),
+                    "wp_id": int(wp_id),
+                    "__source_file": str(df.__source_file.iloc[idx]),
+                })
+
+        # write membership CSV (per-point mapping)
+        memb_df = pd.DataFrame(members, columns=[
+            "lat","lon","climb_rate_ms","cluster_label","wp_id","__source_file"
+        ])
+        memb_csv = out_csv.with_name(out_csv.stem + "_membership.csv")
+        memb_df.to_csv(memb_csv, index=False)
+        log(f"[OK] wrote membership CSV {memb_csv} (rows={len(memb_df)})", lf)
+
+        # --- cluster membership summary (log + separate CSV) ---
+        cluster_sizes = pd.Series(labels)[pd.Series(labels) >= 0].value_counts().sort_index()
+        for cid, size in cluster_sizes.items():
+            log(f"  Cluster {int(cid)}: {int(size)} points", lf)
         if not cluster_sizes.empty:
             log(f"[STATS] Avg pts/cluster: {cluster_sizes.mean():.1f}", lf)
 
-        # also persist to CSV for later analysis
-        stats_csv = out_csv.with_name(out_csv.stem + "_membership.csv")
-        cluster_sizes.rename("points").to_csv(stats_csv, header=True)
-        log(f"[OK] wrote cluster membership stats → {stats_csv}", lf)
-
-        # --- cluster membership summary ---
-        cluster_sizes = pd.Series(labels)[labels >= 0].value_counts().sort_index()
-        if not cluster_sizes.empty:
-            log(f"[SUMMARY] Cluster sizes (points per cluster):", lf)
-            log(f"  min={cluster_sizes.min()}, mean={cluster_sizes.mean():.1f}, max={cluster_sizes.max()}", lf)
-            # If you want the full distribution:
-            for cid, size in cluster_sizes.items():
-                log(f"    cluster {cid}: {size} points", lf)
-
+        # persist sizes to a DIFFERENT file (avoid overwriting membership)
+        sizes_csv = out_csv.with_name(out_csv.stem + "_cluster_sizes.csv")
+        cluster_sizes.rename("points").to_csv(sizes_csv, header=True)
+        log(f"[OK] wrote cluster size stats → {sizes_csv}", lf)
         # 4) write artifacts (always)
         if not args.dry_run:
             out.to_csv(out_csv, index=False)

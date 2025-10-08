@@ -67,7 +67,7 @@ override_globals(globals(), _tuning, allowed={
 
 
 # -------------------- Config --------------------
-DEFAULT_IGC = "2020-11-08 Lumpy Paterson 108645.igc"
+DEFAULT_IGC = "2020-11-08 Lumpy Paterson 108645.igc_subset"
 
 # circle detection thresholds
 C_MAX_WIN_SAMPLES = 2000        # safety cap on window length (samples)

@@ -77,7 +77,7 @@ def to_geojson_points(df: pd.DataFrame) -> dict:
     return {"type":"FeatureCollection","features":feats}
 def main():
     ap=argparse.ArgumentParser(description="Batch IGC runner (proximity-based) with GeoJSON export")
-    ap.add_argument("--igc_all-dir",default="igc_all"); ap.add_argument("--outdir",default="outputs")
+    ap.add_argument("--igc-dir",default="igc"); ap.add_argument("--outdir",default="outputs")
     ap.add_argument("--max-dist-m",type=float,default=5000.0)
     ap.add_argument("--min-climb-ms",type=float,default=1.0)
     ap.add_argument("--min-alt-gain-m",type=float,default=500.0)
@@ -85,8 +85,8 @@ def main():
     ap.add_argument("--geojson-out",default=None); ap.add_argument("--verbose",action="store_true")
     args=ap.parse_args()
     igc_dir=Path(args.igc_dir); outdir=Path(args.outdir); ensure_dir(outdir)
-    igc_files=sorted(igc_dir.glob("*.igc_all"))
-    if not igc_files: print(f"[INFO] No .igc_all files found in {igc_dir.resolve()}"); return
+    igc_files=sorted(igc_dir.glob("*.igc"))
+    if not igc_files: print(f"[INFO] No .igc files found in {igc_dir.resolve()}"); return
     all_rows=[]
     for igc in igc_files:
         stem=igc.stem; flight_outdir=outdir/stem; ensure_dir(flight_outdir)

@@ -60,15 +60,9 @@ def parse_igc_brecords(igc_path: Path) -> pd.DataFrame:
             if not m:
                 continue
 
-            h = int(m["h"]);
-            mi = int(m["m"]);
-            s = int(m["s"])
-            latd = int(m["latd"]);
-            latm = int(m["latm"]);
-            latmm = int(m["latmm"])
-            lond = int(m["lond"]);
-            lonm = int(m["lonm"]);
-            lonmm = int(m["lonmm"])
+            h = int(m["h"]); mi = int(m["m"]); s = int(m["s"])
+            latd = int(m["latd"]); latm = int(m["latm"]); latmm = int(m["latmm"])
+            lond = int(m["lond"]); lonm = int(m["lonm"]); lonmm = int(m["lonmm"])
 
             lat = _dm_to_deg(latd, latm, latmm)
             lon = _dm_to_deg(lond, lonm, lonmm)
@@ -142,6 +136,7 @@ def save_interactive_html(igc_path: Path, out_html: Path) -> None:
     run_dir = OUT_ROOT / stem
     circles = read_clusters(run_dir, "circle_clusters_enriched.csv")
     alts = read_clusters(run_dir, "altitude_clusters.csv")
+    matched = read_clusters(run_dir, "matched_clusters.csv")  # NEW: matched overlay
 
     fig = make_subplots(
         rows=2, cols=1, shared_xaxes=False,
@@ -149,19 +144,20 @@ def save_interactive_html(igc_path: Path, out_html: Path) -> None:
         subplot_titles=(f"Track (lon/lat) — {stem}", "Altitude vs time (min)")
     )
 
-    # Base traces
-    fig.add_trace(
-        go.Scattergl(x=lon, y=lat, mode="lines",
-                     line=dict(width=2, color="blue"), name="Track"),
-        row=1, col=1
+    # Base traces (colors unchanged)
+    track_trace = go.Scattergl(
+        x=lon, y=lat, mode="lines",
+        line=dict(width=2, color="blue"), name="Track"
     )
-    fig.add_trace(
-        go.Scattergl(x=tx, y=alt, mode="lines",
-                     line=dict(width=2, color="black"), name="Altitude"),
-        row=2, col=1
+    alt_trace = go.Scattergl(
+        x=tx, y=alt, mode="lines",
+        line=dict(width=2, color="black"), name="Altitude"
     )
 
-    # Overlays (non-interfering with sync)
+    fig.add_trace(track_trace, row=1, col=1)
+    fig.add_trace(alt_trace,   row=2, col=1)
+
+    # Overlays (keep colors/shapes)
     if alts is not None and len(alts):
         fig.add_trace(
             go.Scattergl(
@@ -177,6 +173,16 @@ def save_interactive_html(igc_path: Path, out_html: Path) -> None:
                 x=circles["lon"], y=circles["lat"], mode="markers",
                 marker=dict(symbol="circle-open", size=12, line=dict(width=2, color="purple")),
                 name="circle_clusters"
+            ),
+            row=1, col=1
+        )
+    # NEW: matched clusters (red ×)
+    if matched is not None and len(matched):
+        fig.add_trace(
+            go.Scattergl(
+                x=matched["lon"], y=matched["lat"], mode="markers",
+                marker=dict(symbol="x", size=12, color="red"),
+                name="matched (red ×)"
             ),
             row=1, col=1
         )
@@ -196,7 +202,7 @@ def save_interactive_html(igc_path: Path, out_html: Path) -> None:
     )
 
     fig.update_xaxes(title_text="Longitude", row=1, col=1)
-    fig.update_yaxes(title_text="Latitude", row=1, col=1)
+    fig.update_yaxes(title_text="Latitude",  row=1, col=1)
     fig.update_xaxes(title_text="Time (min)", row=2, col=1)
     fig.update_yaxes(title_text="Altitude (m)", row=2, col=1)
     fig.update_layout(title=f"Interactive Flight Explorer — {stem}", hovermode="closest")
@@ -207,11 +213,11 @@ def save_interactive_html(igc_path: Path, out_html: Path) -> None:
     # Arrays for JS (use json.dumps to serialize safely)
     lon_js = json.dumps(lon.tolist())
     lat_js = json.dumps(lat.tolist())
-    tx_js = json.dumps(tx.tolist())
+    tx_js  = json.dumps(tx.tolist())
     alt_js = json.dumps(alt.tolist())
 
     # Inject small JS that syncs the hover by pointIndex
-    # NOTE: double braces {{ }} are required to emit literal JS braces in an f-string.
+    # IMPORTANT: Ignore hovers coming from overlay markers so we only sync from main lines.
     post_js = f"""
 <script>
 (function() {{
@@ -228,10 +234,14 @@ def save_interactive_html(igc_path: Path, out_html: Path) -> None:
   gd.on('plotly_hover', function(evt) {{
     if(!evt || !evt.points || !evt.points.length) return;
     var pt = evt.points[0];
+
+    // Only respond when hovering the main lines (Track or Altitude)
+    var traceName = (gd.data[pt.curveNumber] && gd.data[pt.curveNumber].name) || "";
+    if (traceName !== "Track" && traceName !== "Altitude") return;
+
     var idx = clamp(pt.pointIndex, LON.length);
 
-    // update red cursor in map (trace index: after base traces and overlays)
-    // Our trace order: 0 track, 1 altitude, (2.. overlays), last-2 cursor_map, last-1 cursor_alt
+    // cursor traces are always the last two
     var totalTraces = gd.data.length;
     var cursorMapIdx = totalTraces - 2;
     var cursorAltIdx = totalTraces - 1;

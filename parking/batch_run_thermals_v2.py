@@ -8,10 +8,10 @@ def parse_args():
         description="Batch runner for IGC thermal analysis"
     )
     parser.add_argument(
-        "--igc-dir",
+        "--igc_subset-dir",
         type=str,
-        default="igc",
-        help="Path to directory containing IGC files (default: ./igc)"
+        default="igc_subset",
+        help="Path to directory containing IGC files (default: ./igc_subset)"
     )
     parser.add_argument(
         "--outdir",
@@ -37,9 +37,9 @@ def main():
         print(f"[ERROR] IGC folder not found: {igc_dir}")
         sys.exit(2)
 
-    igc_files = sorted(igc_dir.glob("*.igc"))
+    igc_files = sorted(igc_dir.glob("*.igc_subset"))
     if not igc_files:
-        print(f"[ERROR] No .igc files found in: {igc_dir}")
+        print(f"[ERROR] No .igc_subset files found in: {igc_dir}")
         sys.exit(2)
 
     print(f"[OK] Found {len(igc_files)} IGC files in {igc_dir}")

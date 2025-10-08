@@ -2,9 +2,9 @@
 \cocoatextscaling0\cocoaplatform0{\fonttbl\f0\fnil\fcharset0 .SFNS-Regular;\f1\fnil\fcharset0 HelveticaNeue-Bold;\f2\fswiss\fcharset0 Helvetica;
 \f3\fnil\fcharset0 .SFNS-Semibold;\f4\fnil\fcharset0 .AppleSystemUIFontMonospaced-Regular;\f5\froman\fcharset0 TimesNewRomanPSMT;
 \f6\fnil\fcharset0 .SFNS-RegularItalic;\f7\fnil\fcharset0 .SFNS-BoldItalic;\f8\fnil\fcharset0 .SFNS-Bold;
-}
-{\colortbl;\red255\green255\blue255;\red14\green14\blue14;}
-{\*\expandedcolortbl;;\cssrgb\c6700\c6700\c6700;}
+\f9\fnil\fcharset0 HelveticaNeue;}
+{\colortbl;\red255\green255\blue255;\red14\green14\blue14;\red0\green0\blue0;}
+{\*\expandedcolortbl;;\cssrgb\c6700\c6700\c6700;\cspthree\c0\c0\c0;}
 \paperw11900\paperh16840\margl1440\margr1440\vieww11520\viewh15160\viewkind0
 \pard\tx560\tx1120\tx1680\tx2240\tx2800\tx3360\tx3920\tx4480\tx5040\tx5600\tx6160\tx6720\sl324\slmult1\pardirnatural\partightenfactor0
 
@@ -1038,4 +1038,273 @@ python build_waypoints_v1.py\
 \f0  presets)\
 	\'95	Alternate centroid = strength-weighted median\
 	\'95	HDBSCAN/OPTICS fully wired under 
-\f4 --method}
+\f4 --method\
+\
+\
+\
+###################\
+\
+\
+\
+\pard\tx560\tx1120\tx1680\tx2240\tx2800\tx3360\tx3920\tx4480\tx5040\tx5600\tx6160\tx6720\sl324\slmult1\pardirnatural\partightenfactor0
+
+\f3\b\fs44 \cf2 Directories
+\f0\b0\fs28 \cf2 \
+\pard\tqr\tx100\tx260\li260\fi-260\sl324\slmult1\sb240\partightenfactor0
+\cf2 	\'95	
+\f1\b \cf2 Project root (CWD):
+\f0\b0 \cf2  where you run everything (PyCharm or terminal).\
+	\'95	
+\f1\b \cf2 Input folder:
+\f0\b0 \cf2  
+\f4 igc/
+\f0  (all 
+\f4 .igc
+\f0  files live here).\
+	\'95	
+\f1\b \cf2 Per-flight run dir (\'93run_dir\'94):
+\f0\b0 \cf2  
+\f4 outputs/batch_csv/<flight_basename>/
+\f0 .\
+	\'95	
+\f1\b \cf2 Waypoints:
+\f0\b0 \cf2  
+\f4 outputs/waypoints/
+\f0 .\
+\
+\pard\tx560\tx1120\tx1680\tx2240\tx2800\tx3360\tx3920\tx4480\tx5040\tx5600\tx6160\tx6720\sl324\slmult1\pardirnatural\partightenfactor0
+
+\f3\b\fs44 \cf2 Script behavior (v2 line)
+\f0\b0\fs28 \cf2 \
+\
+\pard\tx560\tx1120\tx1680\tx2240\tx2800\tx3360\tx3920\tx4480\tx5040\tx5600\tx6160\tx6720\sl324\slmult1\pardirnatural\partightenfactor0
+
+\f3\b\fs34 \cf2 1) pipeline_v2.py (single IGC; interactive-friendly)
+\f0\b0\fs28 \cf2 \
+\pard\tqr\tx100\tx260\li260\fi-260\sl324\slmult1\sb240\partightenfactor0
+\cf2 	\'95	
+\f1\b \cf2 How to run
+\f0\b0 \cf2 \
+\pard\tqr\tx500\tx660\li260\sl324\slmult1\sb240\partightenfactor0
+\cf2 	\'95	Terminal: 
+\f4 python pipeline_v2.py
+\f0  (prompts for filename under 
+\f4 igc/
+\f0 )\
+or 
+\f4 python pipeline_v2.py "igc/<Flight With Spaces>.igc"
+\f0 \
+	\'95	PyCharm: run without args \uc0\u8594  prompt appears in Run panel.\
+\pard\tqr\tx100\tx260\li260\fi-260\sl324\slmult1\sb240\partightenfactor0
+\cf2 	\'95	
+\f1\b \cf2 What it does
+\f0\b0 \cf2 \
+\pard\tqr\tx500\tx660\li260\sl324\slmult1\sb240\partightenfactor0
+\cf2 	\'95	Computes 
+\f4 run_dir = outputs/batch_csv/<flight_basename>/
+\f0 .\
+	\'95	
+\f1\b Wipes only run_dir
+\f0\b0  (if it exists), 
+\f1\b never
+\f0\b0  wipes 
+\f4 outputs/batch_csv
+\f0 .\
+	\'95	Runs all stages inline (no subprocess): circles \uc0\u8594  circle-clusters \u8594  altitude-clusters \u8594  matcher.\
+	\'95	Writes in 
+\f4 run_dir
+\f0  (flat):\
+\pard\tqr\tx900\tx1060\li260\sl324\slmult1\sb240\partightenfactor0
+\cf2 	\'95	
+\f4 circles.csv
+\f0 \
+	\'95	
+\f4 circle_clusters_enriched.csv
+\f0 \
+	\'95	
+\f4 altitude_clusters.csv
+\f0 \
+	\'95	
+\f4 matched_clusters.csv
+\f0 \
+	\'95	
+\f4 matched_clusters.json
+\f0 \
+	\'95	
+\f4 pipeline_debug.log
+\f0 \
+\pard\tqr\tx500\tx660\li260\sl324\slmult1\sb240\partightenfactor0
+\cf2 	\'95	
+\f1\b No temp files.
+\f0\b0  After each write, verify size>0 and required columns.\
+\
+\pard\tx560\tx1120\tx1680\tx2240\tx2800\tx3360\tx3920\tx4480\tx5040\tx5600\tx6160\tx6720\sl324\slmult1\pardirnatural\partightenfactor0
+
+\f3\b\fs34 \cf2 2) batch_run_v2.py (multi IGCs; non-interactive)
+\f0\b0\fs28 \cf2 \
+\pard\tqr\tx100\tx260\li260\fi-260\sl324\slmult1\sb240\partightenfactor0
+\cf2 	\'95	
+\f1\b \cf2 How to run
+\f0\b0 \cf2 \
+\pard\tqr\tx500\tx660\li260\sl324\slmult1\sb240\partightenfactor0
+\cf2 	\'95	Terminal: 
+\f4 python batch_run_v2.py
+\f0  (scans 
+\f4 igc/
+\f0 ), or 
+\f4 python batch_run_v2.py --igc-dir igc
+\f0 \
+	\'95	PyCharm: run without args; it scans 
+\f4 igc/
+\f0 .\
+\pard\tqr\tx100\tx260\li260\fi-260\sl324\slmult1\sb240\partightenfactor0
+\cf2 	\'95	
+\f1\b \cf2 What it does
+\f0\b0 \cf2 \
+\pard\tqr\tx500\tx660\li260\sl324\slmult1\sb240\partightenfactor0
+\cf2 	\'95	
+\f1\b Wipes and recreates outputs/batch_csv/ up front
+\f0\b0  (clean slate).\
+\pard\tqr\tx900\tx1060\li260\sl324\slmult1\sb240\partightenfactor0
+\cf2 	\'95	Optional: 
+\f4 --append
+\f0  to skip wiping and only add/overwrite affected flights.\
+\pard\tqr\tx500\tx660\li260\sl324\slmult1\sb240\partightenfactor0
+\cf2 	\'95	Iterates every 
+\f4 *.igc
+\f0  in 
+\f4 igc/
+\f0 , and for each:\
+\pard\tqr\tx900\tx1060\li260\sl324\slmult1\sb240\partightenfactor0
+\cf2 	\'95	Builds its 
+\f4 run_dir
+\f0 .\
+	\'95	
+\f1\b Wipes that run_dir
+\f0\b0  (ensures no stale artifacts).\
+	\'95	Runs the same inline pipeline used by 
+\f4 pipeline_v2.py
+\f0 .\
+\pard\tqr\tx500\tx660\li260\sl324\slmult1\sb240\partightenfactor0
+\cf2 	\'95	Logs one line per flight to 
+\f4 outputs/batch_csv/_batch_debug.log
+\f0  with 
+\f4 rc
+\f0 , duration, and 
+\f4 run_dir
+\f0 .\
+\
+\pard\tx560\tx1120\tx1680\tx2240\tx2800\tx3360\tx3920\tx4480\tx5040\tx5600\tx6160\tx6720\sl324\slmult1\pardirnatural\partightenfactor0
+
+\f3\b\fs34 \cf2 3) build_thermals_v2.py (grouper; non-interactive)
+\f0\b0\fs28 \cf2 \
+\pard\tqr\tx100\tx260\li260\fi-260\sl324\slmult1\sb240\partightenfactor0
+\cf2 	\'95	
+\f1\b \cf2 How to run
+\f0\b0 \cf2 \
+\pard\tqr\tx500\tx660\li260\sl324\slmult1\sb240\partightenfactor0
+\cf2 	\'95	Terminal/PyCharm: 
+\f4 python build_thermals_v2.py [--eps-km 5 --min-samples 3 --strength-min 1.0 \'85]
+\f0 \
+\pard\tqr\tx100\tx260\li260\fi-260\sl324\slmult1\sb240\partightenfactor0
+\cf2 	\'95	
+\f1\b \cf2 What it does
+\f0\b0 \cf2 \
+\pard\tqr\tx500\tx660\li260\sl324\slmult1\sb240\partightenfactor0
+\cf2 	\'95	Reads 
+\f1\b all
+\f0\b0  
+\f4 outputs/batch_csv/*/matched_clusters.csv
+\f0 .\
+	\'95	Groups locations (DBSCAN by default).\
+	\'95	Writes:\
+\pard\tqr\tx900\tx1060\li260\sl324\slmult1\sb240\partightenfactor0
+\cf2 	\'95	
+\f4 outputs/waypoints/thermal_waypoints_v2.csv
+\f0 \
+	\'95	
+\f4 outputs/waypoints/thermal_waypoints_v2.geojson
+\f0 \
+	\'95	
+\f4 outputs/waypoints/build_thermals_debug.log
+\f0 \
+\
+\pard\tx560\tx1120\tx1680\tx2240\tx2800\tx3360\tx3920\tx4480\tx5040\tx5600\tx6160\tx6720\sl324\slmult1\pardirnatural\partightenfactor0
+
+\f3\b\fs44 \cf2 Schema invariants (so builder never breaks)
+\f0\b0\fs28 \cf2 \
+\pard\tqr\tx100\tx260\li260\fi-260\sl324\slmult1\sb240\partightenfactor0
+\cf2 	\'95	
+\f4 altitude_clusters.csv
+\f0  must include: 
+\f4 lat, lon, alt_gain_m, duration_s, climb_rate_ms
+\f0  (compute rate if missing).\
+	\'95	
+\f4 matched_clusters.csv
+\f0  must include at least:\
+circle_cluster_id, alt_cluster_id, dist_m, time_overlap_s, overlap_frac,\
+circle_lat, circle_lon, alt_lat, alt_lon, lat, lon,\
+alt_gain_m, duration_s, climb_rate_ms\
+\pard\tx560\tx1120\tx1680\tx2240\tx2800\tx3360\tx3920\tx4480\tx5040\tx5600\tx6160\tx6720\li260\sl324\slmult1\pardirnatural\partightenfactor0
+\cf2 (We\'92ll compute 
+\f4 climb_rate_ms
+\f0  if needed as 
+\f4 alt_gain_m/duration_s
+\f0 .)\
+\pard\tx560\tx1120\tx1680\tx2240\tx2800\tx3360\tx3920\tx4480\tx5040\tx5600\tx6160\tx6720\sl324\slmult1\pardirnatural\partightenfactor0
+
+\f3\b\fs44 \cf2 No temp files; safe writes
+\f0\b0\fs28 \cf2 \
+\pard\tqr\tx100\tx260\li260\fi-260\sl324\slmult1\sb240\partightenfactor0
+\cf2 	\'95	For each stage: write file directly \uc0\u8594  verify exists & size>0 \u8594  validat\
+\
+\uc0\u8594  log 
+\f4 [OK] wrote \'85]
+\f0 .\
+	\'95	Optional 
+\f4 .OK
+\f0  markers (tiny empty files) if you later want skip-on-success behavior.\
+\
+\pard\tx560\tx1120\tx1680\tx2240\tx2800\tx3360\tx3920\tx4480\tx5040\tx5600\tx6160\tx6720\sl324\slmult1\pardirnatural\partightenfactor0
+
+\f3\b\fs44 \cf2 Typical flows
+\f0\b0\fs28 \cf2 \
+\pard\tqr\tx100\tx260\li260\fi-260\sl324\slmult1\sb240\partightenfactor0
+\cf2 	\'95	
+\f1\b \cf2 Single flight (PyCharm or terminal):\
+python pipeline_v2.py\
+# prompt: 2013-12-15 Justin Fitzgerald 388409.igc\
+\pard\tqr\tx100\tx260\li260\fi-260\sl324\slmult1\sb240\partightenfactor0
+
+\f0\b0 \cf2 	\'95	
+\f1\b \cf2 Batch all flights (clean rebuild):\
+\pard\tqr\tx100\tx260\li260\fi-260\sl324\slmult1\sb240\partightenfactor0
+\cf2 python batch_run_v2.py         # wipes outputs/batch_csv first\
+\pard\tx560\tx1120\tx1680\tx2240\tx2800\tx3360\tx3920\tx4480\tx5040\tx5600\tx6160\tx6720\li260\sl324\slmult1\pardirnatural\partightenfactor0
+
+\f8 \cf2 Or keep existing outputs and add new:\
+python batch_run_v2.py --append \
+\pard\tqr\tx100\tx260\li260\fi-260\sl324\slmult1\sb240\partightenfactor0
+
+\f0\b0 \cf2 	\'95	
+\f1\b \cf2 Build thermals after batch or after several manual pipelines:\
+python build_thermals_v2.py --eps-km 5 --min-samples 3 --strength-min 1.0\
+\
+\
+/circles.csv: lat,lon,t_start,t_end,duration_s,alt_pressure,alt_gps,alt_raw,alt_smooth\
+circle_clusters_enriched.csv: cluster_id,lat,lon,t_start,t_end,n_circles,climb_rate_ms,climb_rate_ms_median,alt_gain_m_mean,duration_s_mean\
+\
+altitude_clusters.csv: t_start,t_end,duration_s,alt_gain_m,climb_rate_ms,lat,lon\
+matched_clusters.csv: circle_cluster_id,alt_cluster_id,dist_m,time_overlap_s,overlap_frac,circle_lat,circle_lon,alt_lat,alt_lon,lat,lon,alt_gain_m,duration_s,climb_rate_ms\
+\
+\
+###########\
+\
+\pard\tx560\tx1120\tx1680\tx2240\tx2800\tx3360\tx3920\tx4480\tx5040\tx5600\tx6160\tx6720\pardirnatural\partightenfactor0
+
+\f9\b0 \cf3 these are the order of outputs for each/  Circles (detect_circles): circles.csv: t_start, t_end, lat, lon, climb_rate_ms, alt_gain_m, duration_s;   Circle clusters (cluster_circles): circle_clusters_enriched.csv: cluster_id, lat, lon, t_start, t_end, climb_rate_ms, climb_rate_ms_median, alt_gain_m_mean, duration_s_mean, n_circles;   Altitude-only clusters (detect_altitude_clusters): altitude_clusters.csv: cluster_id, t_start, t_end, lat, lon, climb_rate_ms, alt_gain_m,  duration_s;    Matching (match_clusters): matched_clusters.csv: lat, lon, climb_rate_ms, alt_gain_m, duration_s, circle_cluster_id, alt_cluster_id, circle_lat, circle_lon, alt_lat, alt_lon, dist_m, time_overlap_s, overlap_frac,
+\f1\b \cf2 \
+\pard\tqr\tx100\tx260\li260\fi-260\sl324\slmult1\sb240\partightenfactor0
+
+\f0\b0 \cf2 \
+}

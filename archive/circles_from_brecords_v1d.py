@@ -309,7 +309,7 @@ def main():
 
     # Defaults
     default_igc = Path("igc/2020-11-08 Lumpy Paterson 108645.igc")
-    out_root = Path("outputs/batch_csv")
+    out_root = Path("../outputs/batch_csv")
 
     # Resolve IGC path (arg or prompt)
     if args.igc:
@@ -383,7 +383,7 @@ def main():
     # --- NEW: copy original IGC into run_dir ---
     import shutil
     stem = run_dir.name  # folder name like "123310"
-    src_dir = Path("/Users/denisbuckley/PycharmProjects/chatgpt_igc/igc")
+    src_dir = Path("/igc")
     src1 = src_dir / f"{stem}.igc"
     src2 = src_dir / f"{stem}.IGC"
     dest = run_dir / f"{stem}.igc"

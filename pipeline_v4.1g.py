@@ -692,6 +692,46 @@ def build_thermals_space_only(matches: pd.DataFrame,
     out = pd.DataFrame(rows)
     return out[out_cols].sort_values("thermal_id").reset_index(drop=True)
 
+def nearest_neighbor_distances_m(df, lat_key="lat", lon_key="lon"):
+    """Return list of nearest-neighbor distances (meters) for each row in df."""
+    if df is None or df.empty or lat_key not in df.columns or lon_key not in df.columns:
+        return []
+    lat = pd.to_numeric(df[lat_key], errors="coerce").to_numpy()
+    lon = pd.to_numeric(df[lon_key], errors="coerce").to_numpy()
+    n = len(lat)
+    out = []
+    for i in range(n):
+        if not (np.isfinite(lat[i]) and np.isfinite(lon[i])):
+            continue
+        best = float("inf")
+        for j in range(n):
+            if i == j:
+                continue
+            if not (np.isfinite(lat[j]) and np.isfinite(lon[j])):
+                continue
+            d = haversine_m(lat[i], lon[i], lat[j], lon[j])
+            if d < best:
+                best = d
+        if math.isfinite(best) and best < float("inf"):
+            out.append(best)
+    return out
+
+def summarize_nn_dists_m(dists):
+    """Summarize nearest-neighbor distances into key percentiles."""
+    if not dists:
+        return {}
+    arr = np.array(dists, dtype=float)
+    return {
+        "count": int(arr.size),
+        "min_m": float(np.min(arr)),
+        "median_m": float(np.median(arr)),
+        "mean_m": float(np.mean(arr)),
+        "p90_m": float(np.percentile(arr, 90)),
+        "p95_m": float(np.percentile(arr, 95)),
+        "max_m": float(np.max(arr)),
+    }
+
+'''
 # suggest eps from matches
 def suggest_eps_from_matches(matches: pd.DataFrame, percentiles=(80, 85, 90, 95)) -> dict:
     if matches.empty or not {"lat","lon"}.issubset({c.lower() for c in matches.columns}):
@@ -721,7 +761,7 @@ def suggest_eps_from_matches(matches: pd.DataFrame, percentiles=(80, 85, 90, 95)
 
     arr = np.array(dmin, dtype=float)
     return {f"p{p}": float(np.percentile(arr, p)) for p in percentiles}
-
+'''
 # -------------------- Ensure IGC copy into run_dir --------------------
 import shutil, gzip
 
@@ -1003,6 +1043,53 @@ def render_one(stem: str, run_dir: Path, show: bool = True) -> None:
         plt.show()
     plt.close(fig)
 
+import math
+
+def _haversine_m(lat1, lon1, lat2, lon2):
+    R = 6371000.0
+    p1 = math.radians(lat1); p2 = math.radians(lat2)
+    dphi = p2 - p1; dl = math.radians(lon2 - lon1)
+    a = math.sin(dphi/2)**2 + math.cos(p1)*math.cos(p2)*math.sin(dl/2)**2
+    return 2*R*math.asin(math.sqrt(a))
+
+def nearest_neighbor_distances_m(df, lat_key="lat", lon_key="lon"):
+    """Return a list of each point’s nearest-neighbor distance (meters)."""
+    if df is None or df.empty or lat_key not in df.columns or lon_key not in df.columns:
+        return []
+    lat = pd.to_numeric(df[lat_key], errors="coerce").to_numpy()
+    lon = pd.to_numeric(df[lon_key], errors="coerce").to_numpy()
+    n = len(lat)
+    out = []
+    for i in range(n):
+        if not (np.isfinite(lat[i]) and np.isfinite(lon[i])):
+            continue
+        best = float("inf")
+        for j in range(n):
+            if i == j:
+                continue
+            if not (np.isfinite(lat[j]) and np.isfinite(lon[j])):
+                continue
+            d = _haversine_m(lat[i], lon[i], lat[j], lon[j])
+            if d < best:
+                best = d
+        if math.isfinite(best) and best < float("inf"):
+            out.append(best)
+    return out
+
+def summarize_nn_dists_m(dists):
+    """Return dict of summary stats (meters)."""
+    if not dists:
+        return {}
+    arr = np.array(dists, dtype=float)
+    return {
+        "count": int(arr.size),
+        "min_m": float(np.min(arr)),
+        "median_m": float(np.median(arr)),
+        "mean_m": float(np.mean(arr)),
+        "p90_m": float(np.percentile(arr, 90)),
+        "p95_m": float(np.percentile(arr, 95)),
+        "max_m": float(np.max(arr)),
+    }
 # ==================== MAIN ====================
 def main() -> int:
     ap = argparse.ArgumentParser()
@@ -1055,6 +1142,7 @@ def main() -> int:
     logf_write(logf, f"TUNING: circle_eps_m={circle_eps_m}, circle_min_samples={circle_min_samples}, "
                      f"alt_min_gain={alt_min_gain}, alt_min_duration={alt_min_duration}, "
                      f"match_max_dist_m={match_max_dist_m}, match_min_overlap={match_min_overlap}")
+    print()
     print(
         f"[TUNING] circle_eps_m={circle_eps_m}, circle_min_samples={circle_min_samples}, "
         f"alt_min_gain={alt_min_gain}, alt_min_duration={alt_min_duration}, "
@@ -1130,9 +1218,11 @@ def main() -> int:
         max_dist_m=match_max_dist_m,
         min_overlap_frac=match_min_overlap,
     )
+    '''
     print()
     print("[TUNE] eps suggestions (m):", suggest_eps_from_matches(matches))
     print()
+    '''
 
     # matches already computed
     group_eps_m = float(cfg.get("match_group_eps_m", 10000.0))  # <— tune this
@@ -1143,6 +1233,7 @@ def main() -> int:
     thermals.to_csv(thermals_csv, index=False)
 
     print(f"[SUMMARY] matches={len(matches)}, thermals={len(thermals)} (→ {thermals_csv})")
+    print()
 
     match_cols = [
         "lat","lon","climb_rate_ms","alt_gain_m","duration_s",
@@ -1156,6 +1247,18 @@ def main() -> int:
         matches = matches.reindex(columns=match_cols)
     match_csv  = run_dir / "matched_clusters.csv"
     matches.to_csv(match_csv, index=False)
+
+    nn = nearest_neighbor_distances_m(matches)
+    stats = summarize_nn_dists_m(nn)
+    if stats:
+        print("[NN] nearest-neighbor distances (meters): "
+              f"min={stats['min_m']:.0f}, median={stats['median_m']:.0f}, "
+              f"mean={stats['mean_m']:.0f}, p90={stats['p90_m']:.0f}, "
+              f"p95={stats['p95_m']:.0f}, max={stats['max_m']:.0f}")
+        pd.Series(nn, name="nn_distance_m").to_csv(run_dir / "nn_distances_m.csv", index=False)
+    else:
+        print("[NN] nearest-neighbor distances: (n/a)")
+    print()
 
     # Summary JSON
     payload = {"stats": stats, "rows": int(len(matches))}
@@ -1173,6 +1276,7 @@ def main() -> int:
     (run_dir / "matched_clusters.json").write_text(json.dumps(payload, indent=2), encoding="utf-8")
 
     # Quick console summary
+    print()
     print(f"[SUMMARY] circles={len(circles)}, circle_clusters={len(cc)}, altitude_clusters={len(alts)}, matched={len(matches)}")
     logf_write(logf, f"[OK] wrote matches={len(matches)}")
 

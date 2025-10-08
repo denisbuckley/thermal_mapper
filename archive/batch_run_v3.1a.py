@@ -557,7 +557,7 @@ def match_clusters(circle_clusters: pd.DataFrame,
 from pathlib import Path
 import shutil, gzip
 
-def ensure_igc_copy(stem: str, run_dir: Path, src_root: Path = Path("igc")) -> bool:
+def ensure_igc_copy(stem: str, run_dir: Path, src_root: Path = Path("../igc")) -> bool:
     """
     Copy (or gunzip) the original IGC from ./igc/<stem>.igc into run_dir/<stem>.igc.
     Looks for .igc, .IGC, or .igc.gz under src_root.
@@ -634,7 +634,7 @@ def main() -> int:
         wipe_run_dir(run_dir)
 
         # ✅ ensure IGC is present in run_dir
-        ensure_igc_copy(flight, run_dir, src_root=Path("igc"))
+        ensure_igc_copy(flight, run_dir, src_root=Path("../igc"))
 
         logf = run_dir / "pipeline_debug.log"
 

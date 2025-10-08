@@ -289,7 +289,7 @@ def main():
     logf = open(f"circles_clean_{ts}.txt", "w")
     sys.stdout = sys.stderr = Tee(sys.stdout, logf)
 
-    igc_file = "2020-01-11 Norm Bloch 106248.igc"
+    igc_file = "2020-01-11 Norm Bloch 106248.igc_subset"
     print(f"[circles-clean v2c] Parsing IGC: {igc_file}")
     df = parse_igc(igc_file)
     if df.empty:

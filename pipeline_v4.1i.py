@@ -1203,6 +1203,10 @@ def render_one(stem: str, run_dir: Path, show: bool = True) -> None:
         plot_thermal_groups_ovals(ax_map, grouped_df, radius_m=group_radius_m, edgecolor="orange")
     # === END ADDED ===
 
+    n_thermals = 0
+    if grouped_df is not None:
+        n_thermals = len(grouped_df)
+
     ax_map.legend(loc="best", frameon=True)
     ax_map.grid(True, linestyle=":", alpha=0.4)
 
@@ -1258,6 +1262,7 @@ def render_one(stem: str, run_dir: Path, show: bool = True) -> None:
         f"Duration: {_fmt_hms(duration_s)}\n"
         f"Circle clusters: {n_circ}\n"
         f"Altitude clusters: {n_altc}\n"
+        f"Thermals: {n_thermals}\n"
         f"{stats_txt}"
     )
 

@@ -11,6 +11,7 @@ import sys
 import time
 from pathlib import Path
 from typing import List, Optional, Tuple
+from matplotlib.patches import Ellipse
 
 import numpy as np
 import pandas as pd
@@ -882,6 +883,66 @@ def matched_summary_text(run_dir: Path) -> str:
 
     )
 
+def read_grouped_matches(run_dir: Path) -> Optional[pd.DataFrame]:
+    """Load thermals produced by the thermal builder (grouped_matches.csv)."""
+    p = run_dir / "grouped_matches.csv"
+    if not p.exists():
+        return None
+    try:
+        df = pd.read_csv(p)
+        # must have lat/lon
+        if not {"lat","lon"}.issubset({c.lower() for c in df.columns}):
+            return None
+        return df
+    except Exception:
+        return None
+
+def _meters_to_degs(lat_deg: float, meters: float) -> tuple[float, float]:
+    """
+    Convert a metric radius to ~degrees of lat/long for plotting an ellipse:
+    - height (lat) in deg ≈ meters / 111,000
+    - width  (lon) in deg ≈ meters / (111,000 * cos(lat))
+    """
+    if not np.isfinite(lat_deg):
+        lat_deg = 0.0
+    km_per_deg_lat = 111.0
+    km_per_deg_lon = km_per_deg_lat * max(0.1, math.cos(math.radians(lat_deg)))  # avoid div by ~0 near poles
+    h_deg = meters / (km_per_deg_lat * 1000.0)
+    w_deg = meters / (km_per_deg_lon * 1000.0)
+    return w_deg, h_deg
+
+# plots oval around thermal-grouped clusters
+def plot_thermal_groups_ovals(ax, groups_df: pd.DataFrame, radius_m: float, edgecolor="orange"):
+    """
+    Draw a circle/oval per thermal centered at (lon, lat) with radius `radius_m`.
+    Uses lat-dependent scaling so the oval looks right on lon/lat axes.
+    """
+    if groups_df is None or len(groups_df) == 0:
+        return
+    # use columns case-insensitively
+    cols = {c.lower(): c for c in groups_df.columns}
+    LAT = cols["lat"]; LON = cols["lon"]
+    for row in groups_df.itertuples(index=False):
+        lat = getattr(row, LAT); lon = getattr(row, LON)
+        if not (np.isfinite(lat) and np.isfinite(lon)):
+            continue
+        w_deg, h_deg = _meters_to_degs(lat, radius_m)
+        e = Ellipse(
+            (lon, lat),
+            width=2.0 * w_deg,
+            height=2.0 * h_deg,
+            angle=0.0,
+            edgecolor=edgecolor,
+            facecolor="none",
+            linewidth=2.8,
+            alpha=0.6,
+            zorder=3.5
+        )
+        ax.add_patch(e)
+    # legend proxy
+    ax.scatter([], [], s=420, facecolors="none", edgecolors=edgecolor, linewidths=2.8,
+               marker="o", label="thermal radius (oval)")
+
 def render_one(stem: str, run_dir: Path, show: bool = True) -> None:
     # --- load track for map panel ---
     track = load_track_for_plot(run_dir, stem)
@@ -1232,6 +1293,30 @@ def main() -> int:
     thermals_csv = run_dir / "grouped_matches.csv"
     thermals.to_csv(thermals_csv, index=False)
 
+    # grouped thermals (red ◉) if present
+    gfile = run_dir / "grouped_matches.csv"
+    grouped_df = None
+    if gfile.exists():
+        try:
+            gm = pd.read_csv(gfile)
+            grouped_df = gm  # keep for ovals
+            gcols = {c.lower(): c for c in gm.columns}
+            if "lat" in gcols and "lon" in gcols and len(gm):
+                ax_map.scatter(pd.to_numeric(gm[gcols["lon"]], errors="coerce"),
+                               pd.to_numeric(gm[gcols["lat"]], errors="coerce"),
+                               s=420, facecolors="none", edgecolors="red", linewidths=2.8,
+                               marker="o", label="thermals (red ◉)")
+        except Exception:
+            grouped_df = None
+            pass
+
+    # === BIG OVALS around grouped thermals (use match_group_eps_m as radius) ===
+    try:
+        cfg_for_plot = load_tuning()
+        group_radius_m = float(cfg_for_plot.get("match_group_eps_m", 10000.0))
+    except Exception:
+        group_radius_m = 10000.0
+    plot_thermal_groups_ovals(ax_map, grouped_df, radius_m=group_radius_m, edgecolor="orange")
     #print(f"[SUMMARY] matches={len(matches)}, thermals={len(thermals)} (→ {thermals_csv})")
 
     match_cols = [

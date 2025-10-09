@@ -1046,37 +1046,27 @@ def _meters_to_degs(lat_deg: float, meters: float) -> tuple[float, float]:
     w_deg = meters / (km_per_deg_lon * 1000.0)
     return w_deg, h_deg
 
-# PLOTS OVAL AROUND THERMAL-GROUPED CMATCHED CLUSTERS
-def plot_thermal_groups_ovals(ax, groups_df: pd.DataFrame, radius_m: float, edgecolor="orange"):
-    """
-    Draw a circle/oval per thermal centered at (lon, lat) with radius `radius_m`.
-    Uses lat-dependent scaling so the oval looks right on lon/lat axes.
-    """
-    if groups_df is None or len(groups_df) == 0:
-        return
-    # use columns case-insensitively
+def to_local_xy(lat, lon, lat0, lon0):
+    """Approx local ENU meters around (lat0, lon0)."""
+    lat = np.asarray(lat, dtype=float); lon = np.asarray(lon, dtype=float)
+    x = (lon - lon0) * 111000.0 * math.cos(math.radians(lat0))  # East (m)
+    y = (lat - lat0) * 111000.0                                  # North (m)
+    return x, y
+
+from matplotlib.patches import Circle
+
+#plots circle around thermal-grouped matched clusters
+def plot_thermal_groups_circles(ax, groups_df, lat0, lon0, radius_m, edgecolor="orange"):
+    if groups_df is None or groups_df.empty: return
     cols = {c.lower(): c for c in groups_df.columns}
-    LAT = cols["lat"]; LON = cols["lon"]
-    for row in groups_df.itertuples(index=False):
-        lat = getattr(row, LAT); lon = getattr(row, LON)
-        if not (np.isfinite(lat) and np.isfinite(lon)):
-            continue
-        w_deg, h_deg = _meters_to_degs(lat, radius_m)
-        e = Ellipse(
-            (lon, lat),
-            width=2.0 * w_deg,
-            height=2.0 * h_deg,
-            angle=0.0,
-            edgecolor=edgecolor,
-            facecolor="none",
-            linewidth=2.8,
-            alpha=0.6,
-            zorder=3.5
-        )
-        ax.add_patch(e)
+    LAT, LON = cols["lat"], cols["lon"]
+    x, y = to_local_xy(groups_df[LAT].to_numpy(), groups_df[LON].to_numpy(), lat0, lon0)
+    for xi, yi in zip(x, y):
+        circ = Circle((xi, yi), radius_m, facecolor="none", edgecolor=edgecolor, lw=2.8, alpha=0.6, zorder=3.5)
+        ax.add_patch(circ)
     # legend proxy
     ax.scatter([], [], s=420, facecolors="none", edgecolors=edgecolor, linewidths=2.8,
-               marker="o", label="thermal radius (oval)")
+               marker="o", label="thermal radius (circle, meters)")
 def render_one(stem: str, run_dir: Path, show: bool = True) -> None:
     # --- load track for map panel ---
     track = load_track_for_plot(run_dir, stem)
@@ -1088,17 +1078,15 @@ def render_one(stem: str, run_dir: Path, show: bool = True) -> None:
     def hav(lat1, lon1, lat2, lon2):
         R = 6371008.8
         import math
-        p1 = math.radians(lat1);
-        p2 = math.radians(lat2)
-        dphi = p2 - p1;
-        dl = math.radians(lon2 - lon1)
-        a = math.sin(dphi / 2) ** 2 + math.cos(p1) * math.cos(p2) * math.sin(dl / 2) ** 2
-        return 2 * R * math.asin(math.sqrt(a))
+        p1 = math.radians(lat1); p2 = math.radians(lat2)
+        dphi = p2 - p1; dl = math.radians(lon2 - lon1)
+        a = math.sin(dphi/2)**2 + math.cos(p1)*math.cos(p2)*math.sin(dl/2)**2
+        return 2*R*math.asin(math.sqrt(a))
 
     dist_m = 0.0
     for i in range(1, len(track)):
-        dist_m += hav(track.lat.iloc[i - 1], track.lon.iloc[i - 1],
-                      track.lat.iloc[i], track.lon.iloc[i])
+        dist_m += hav(track.lat.iloc[i-1], track.lon.iloc[i-1],
+                      track.lat.iloc[i],     track.lon.iloc[i])
     dist_km = dist_m / 1000.0
 
     duration_s = None
@@ -1113,10 +1101,7 @@ def render_one(stem: str, run_dir: Path, show: bool = True) -> None:
 
     def _fmt_hms(sec):
         if sec is None or not np.isfinite(sec) or sec <= 0: return "n/a"
-        sec = int(round(sec));
-        h = sec // 3600;
-        m = (sec % 3600) // 60;
-        s = sec % 60
+        sec = int(round(sec)); h = sec // 3600; m = (sec % 3600) // 60; s = sec % 60
         return f"{h:02d}:{m:02d}:{s:02d}"
 
     # --- figure with two panels (map + altitude) ---
@@ -1126,56 +1111,68 @@ def render_one(stem: str, run_dir: Path, show: bool = True) -> None:
         sharex=False
     )
 
-    # --- top panel: track map ---
+    # --- top panel: track map in local ENU meters ---
     ax_map.set_title(f"Glider Track & Clusters — {stem}")
-    ax_map.set_xlabel("Longitude");
-    ax_map.set_ylabel("Latitude")
+    ax_map.set_xlabel("East (m)"); ax_map.set_ylabel("North (m)")
 
-    segs, is_climb = climb_segments(track)
-    lc_sink = LineCollection(segs[~is_climb], colors="#1E6EFF", linewidths=4.0, alpha=0.9)
-    lc_climb = LineCollection(segs[is_climb], colors="#FFD400", linewidths=4.0, alpha=0.95)
-    ax_map.add_collection(lc_sink);
-    ax_map.add_collection(lc_climb)
+    # choose local origin (center of flight works well)
+    lat0, lon0 = float(track["lat"].mean()), float(track["lon"].mean())
+    track["x"], track["y"] = to_local_xy(track["lat"], track["lon"], lat0, lon0)
 
-    # --- mark start point with a star ---
-    start_lon, start_lat = track["lon"].iloc[0], track["lat"].iloc[0]
-    ax_map.scatter([start_lon], [start_lat],
+    # climb mask (reuse your time/alt logic)
+    alt_arr = track["alt"].to_numpy()
+    if track["time"].notna().any():
+        t_ns = pd.to_datetime(track["time"], utc=True, errors="coerce").astype("int64", copy=False).to_numpy()
+        dt = np.diff(t_ns) / 1e9
+        dt[dt == 0] = 1e-6
+    else:
+        dt = np.ones(len(alt_arr) - 1, dtype=float)
+    dalt = np.diff(alt_arr)
+    climb_mask = (dalt / dt) > 0
+
+    # build segments in meters
+    pts = np.column_stack([track["x"].to_numpy(), track["y"].to_numpy()])
+    segs = np.stack([pts[:-1], pts[1:]], axis=1)
+
+    lc_sink  = LineCollection(segs[~climb_mask], colors="#1E6EFF", linewidths=4.0, alpha=0.9)
+    lc_climb = LineCollection(segs[ climb_mask], colors="#FFD400", linewidths=4.0, alpha=0.95)
+    ax_map.add_collection(lc_sink); ax_map.add_collection(lc_climb)
+
+    # start marker
+    ax_map.scatter([track["x"].iloc[0]], [track["y"].iloc[0]],
                    marker="*", color="white", s=300,
-                   edgecolors="black", linewidths=2.0,
-                   zorder=5, label="Start")
+                   edgecolors="black", linewidths=2.0, zorder=5, label="Start")
 
-    ax_map.set_xlim(track["lon"].min() - 0.01, track["lon"].max() + 0.01)
-    ax_map.set_ylim(track["lat"].min() - 0.01, track["lat"].max() + 0.01)
-
-    # overlays: draw altitude clusters first (squares), then circle clusters (bigger circles)
+    # overlays in meters
     alt_df = read_clusters_xy(run_dir, "altitude_clusters.csv")
     if alt_df is not None and len(alt_df):
-        ax_map.scatter(alt_df["lon"], alt_df["lat"], s=100, facecolors="none",
+        xa, ya = to_local_xy(alt_df["lat"], alt_df["lon"], lat0, lon0)
+        ax_map.scatter(xa, ya, s=100, facecolors="none",
                        edgecolors="green", marker="s", linewidths=2.2,
                        label="altitude_clusters (green □)")
 
     circle_df = read_clusters_xy(run_dir, "circle_clusters_enriched.csv")
     if circle_df is not None and len(circle_df):
-        ax_map.scatter(circle_df["lon"], circle_df["lat"], s=200, facecolors="none",
+        xc, yc = to_local_xy(circle_df["lat"], circle_df["lon"], lat0, lon0)
+        ax_map.scatter(xc, yc, s=200, facecolors="none",
                        edgecolors="purple", marker="o", linewidths=2.4,
                        label="circle_clusters (purple ○)")
 
-    # matched positions (red ×) if present
+    # matched positions (red ×)
+    grouped_df = None
     mfile = run_dir / "matched_clusters.csv"
     if mfile.exists():
         try:
             m = pd.read_csv(mfile)
             cols = {c.lower(): c for c in m.columns}
             if "lat" in cols and "lon" in cols and len(m):
-                ax_map.scatter(pd.to_numeric(m[cols["lon"]], errors="coerce"),
-                               pd.to_numeric(m[cols["lat"]], errors="coerce"),
-                               s=300, color="red", marker="x", linewidths=2.8,
-                               label="matched (red ×)")
+                xm, ym = to_local_xy(m[cols["lat"]], m[cols["lon"]], lat0, lon0)
+                ax_map.scatter(np.asarray(xm, dtype=float), np.asarray(ym, dtype=float),
+                               s=300, color="red", marker="x", linewidths=2.8, label="matched (red ×)")
         except Exception:
             pass
 
-    # === ADDED: plot grouped thermals and BIG OVALS ===
-    grouped_df = None
+    # grouped thermals (centers in red ◉) and metric circles
     gfile = run_dir / "grouped_matches.csv"
     if gfile.exists():
         try:
@@ -1183,36 +1180,50 @@ def render_one(stem: str, run_dir: Path, show: bool = True) -> None:
             grouped_df = gm
             gcols = {c.lower(): c for c in gm.columns}
             if "lat" in gcols and "lon" in gcols and len(gm):
-                # red ◉ centers for thermals
-                ax_map.scatter(pd.to_numeric(gm[gcols["lon"]], errors="coerce"),
-                               pd.to_numeric(gm[gcols["lat"]], errors="coerce"),
-                               s=420, facecolors="none", edgecolors="red", linewidths=2.8,
+                xg, yg = to_local_xy(gm[gcols["lat"]], gm[gcols["lon"]], lat0, lon0)
+                ax_map.scatter(xg, yg, s=420, facecolors="none", edgecolors="red", linewidths=2.8,
                                marker="o", label="thermals (red ◉)")
         except Exception:
             grouped_df = None
 
-    # Use tuning radius for oval size
+    # metric circles (not ellipses) using match_group_eps_m
     try:
         cfg_for_plot = load_tuning()
         group_radius_m = float(cfg_for_plot.get("match_group_eps_m", 10000.0))
     except Exception:
         group_radius_m = 10000.0
+    plot_thermal_groups_circles(ax_map, grouped_df, lat0, lon0, radius_m=group_radius_m, edgecolor="orange")
 
-    # Draw big ovals around thermals (orange outline)
-    if grouped_df is not None and len(grouped_df):
-        plot_thermal_groups_ovals(ax_map, grouped_df, radius_m=group_radius_m, edgecolor="orange")
-    # === END ADDED ===
+    # limits & aspect
+    pad = 2000.0  # meters
+    ax_map.set_xlim(track["x"].min() - pad, track["x"].max() + pad)
+    ax_map.set_ylim(track["y"].min() - pad, track["y"].max() + pad)
+    ax_map.set_aspect("equal", adjustable="datalim")
 
-    n_thermals = 0
-    if grouped_df is not None:
-        n_thermals = len(grouped_df)
+    # --- north arrow (draw AFTER limits so it’s always visible) ---
+    ax_map.annotate(
+        "N",
+        xy=(0.93, 0.12), xytext=(0.93, 0.24),
+        xycoords="axes fraction", textcoords="axes fraction",
+        arrowprops=dict(arrowstyle="->", lw=2, color="black"),
+        ha="center", va="center", fontsize=12, color="black"
+    )
+
+    # --- scale bar (20 km) drawn AFTER limits ---
+    L = 20000.0  # meters
+    xlim = ax_map.get_xlim(); ylim = ax_map.get_ylim()
+    x0 = xlim[0] + 0.06 * (xlim[1] - xlim[0])  # bottom-left padding
+    y0 = ylim[0] + 0.06 * (ylim[1] - ylim[0])
+    ax_map.plot([x0, x0 + L], [y0, y0], lw=3, color="black", solid_capstyle="butt")
+    ax_map.text(x0 + L / 2.0, y0, "20 km",
+                ha="center", va="bottom", fontsize=10, color="black",
+                bbox=dict(fc="white", ec="none", alpha=0.7, pad=1.0))
 
     ax_map.legend(loc="best", frameon=True)
     ax_map.grid(True, linestyle=":", alpha=0.4)
 
     # --- bottom panel: altitude profile vs time (min) ---
-    x_min = None;
-    y_alt = None
+    x_min = None; y_alt = None
     if igc_copy.exists():
         try:
             df_alt = parse_igc_brecords(igc_copy)
@@ -1236,25 +1247,23 @@ def render_one(stem: str, run_dir: Path, show: bool = True) -> None:
     pilot = igc_pilot_name(igc_copy) if igc_copy.exists() else "Unknown"
     weglide_url = f"www.weglide.org/flight/{stem}"
 
-    n_circ = 0
-    n_altc = 0
+    n_circ = 0; n_altc = 0; n_thermals = 0
     try:
         p_cc = run_dir / "circle_clusters_enriched.csv"
         if p_cc.exists():
-            _cc = pd.read_csv(p_cc)
-            n_circ = int(len(_cc))
+            _cc = pd.read_csv(p_cc); n_circ = int(len(_cc))
     except Exception:
         pass
     try:
         p_ac = run_dir / "altitude_clusters.csv"
         if p_ac.exists():
-            _ac = pd.read_csv(p_ac)
-            n_altc = int(len(_ac))
+            _ac = pd.read_csv(p_ac); n_altc = int(len(_ac))
     except Exception:
         pass
+    if grouped_df is not None:
+        n_thermals = int(len(grouped_df))
 
     stats_txt = matched_summary_text(run_dir)
-
     info_box = (
         f"Pilot: {pilot}\n"
         f"{weglide_url}\n"
@@ -1265,7 +1274,6 @@ def render_one(stem: str, run_dir: Path, show: bool = True) -> None:
         f"Thermals: {n_thermals}\n"
         f"{stats_txt}"
     )
-
     fig.text(0.965, 0.335, info_box,
              ha="right", va="bottom",
              fontsize=9, color="black",

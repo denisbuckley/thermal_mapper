@@ -1,0 +1,2 @@
+cluster_id,lat,lon,t_start,t_end,climb_rate_ms,alt_gain_m,duration_s
+0,-32.137495876288654,116.96467336769757,187.0,346.0,4.226415094339623,672.0,159.0

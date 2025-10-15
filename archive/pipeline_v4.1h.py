@@ -766,7 +766,7 @@ def suggest_eps_from_matches(matches: pd.DataFrame, percentiles=(80, 85, 90, 95)
 # -------------------- Ensure IGC copy into run_dir --------------------
 import shutil, gzip
 
-def ensure_igc_copy(stem: str, run_dir: Path, src_root: Path = Path("igc")) -> bool:
+def ensure_igc_copy(stem: str, run_dir: Path, src_root: Path = Path("../igc")) -> bool:
     run_dir.mkdir(parents=True, exist_ok=True)
     dest = run_dir / f"{stem}.igc"
     if dest.exists() and dest.stat().st_size > 0:
@@ -911,7 +911,6 @@ def _meters_to_degs(lat_deg: float, meters: float) -> tuple[float, float]:
     w_deg = meters / (km_per_deg_lon * 1000.0)
     return w_deg, h_deg
 
-# plots oval around thermal-grouped clusters
 def plot_thermal_groups_ovals(ax, groups_df: pd.DataFrame, radius_m: float, edgecolor="orange"):
     """
     Draw a circle/oval per thermal centered at (lon, lat) with radius `radius_m`.
@@ -1293,30 +1292,6 @@ def main() -> int:
     thermals_csv = run_dir / "grouped_matches.csv"
     thermals.to_csv(thermals_csv, index=False)
 
-    # grouped thermals (red ◉) if present
-    gfile = run_dir / "grouped_matches.csv"
-    grouped_df = None
-    if gfile.exists():
-        try:
-            gm = pd.read_csv(gfile)
-            grouped_df = gm  # keep for ovals
-            gcols = {c.lower(): c for c in gm.columns}
-            if "lat" in gcols and "lon" in gcols and len(gm):
-                ax_map.scatter(pd.to_numeric(gm[gcols["lon"]], errors="coerce"),
-                               pd.to_numeric(gm[gcols["lat"]], errors="coerce"),
-                               s=420, facecolors="none", edgecolors="red", linewidths=2.8,
-                               marker="o", label="thermals (red ◉)")
-        except Exception:
-            grouped_df = None
-            pass
-
-    # === BIG OVALS around grouped thermals (use match_group_eps_m as radius) ===
-    try:
-        cfg_for_plot = load_tuning()
-        group_radius_m = float(cfg_for_plot.get("match_group_eps_m", 10000.0))
-    except Exception:
-        group_radius_m = 10000.0
-    plot_thermal_groups_ovals(ax_map, grouped_df, radius_m=group_radius_m, edgecolor="orange")
     #print(f"[SUMMARY] matches={len(matches)}, thermals={len(thermals)} (→ {thermals_csv})")
 
     match_cols = [

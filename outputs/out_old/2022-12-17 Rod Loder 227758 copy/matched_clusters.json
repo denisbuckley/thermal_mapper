@@ -1,0 +1,8 @@
+{
+  "stats": {
+    "pairs": 10,
+    "max_dist_m": 600.0,
+    "min_overlap_frac": 0.25
+  },
+  "rows": 10
+}

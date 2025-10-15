@@ -7,20 +7,16 @@
   "circle_min_bank_deg": 25.0,
   "circle_vmax_climb_ms": 7.0,
 
-  "alt_min_gain": 200,
+  "alt_min_gain": 100,
   "alt_min_duration": 10,
 
   "circle_eps_m": 300,
   "circle_min_samples": 3,
 
-  "match_max_dist_m": 500,
+  "match_max_dist_m": 1000,
   "match_min_overlap": 0.1,
 
-
-  "match_group_eps_m": 10000,
+  "match_group_eps_m": 22000,
   "match_group_min_members": 1
-
-
-
 
 }

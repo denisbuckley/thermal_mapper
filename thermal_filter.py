@@ -1,28 +1,55 @@
 #!/usr/bin/env python3
 """
-filter_thermals_along_leg_strength_labels.py
---------------------------------------------
-Filters thermal waypoints to those near a selected flight leg (start→end),
-within a widening cone. Labels exported points by numeric strength (e.g., "2.8").
+thermal_filter.py
+-----------------
+Filter thermal waypoints that are consistent with a flight leg using a
+**diamond-shaped sector** (narrow at the ends, widest at the midpoint).
 
-Outputs written to: outputs/waypoints/
+Geometry:
+  - Let L = great-circle distance start→end.
+  - At fractional position f along the leg (0 at start, 1 at end),
+    the maximum lateral deviation allowed is:
+
+        δ_allowed(f) = min(f, 1 - f) * L * tan(cone_half_angle)
+
+    This forms a diamond/lens sector: zero deviation at start and end,
+    maximum deviation (L/2 * tan(cone_half_angle)) at the midpoint.
+
+Filter rule:
+  - Project each thermal onto the leg SE.
+  - Keep it if cross-track distance ≤ δ_allowed(f) and 0 ≤ f ≤ 1.
+
+Outputs:
+  - CSV:  outputs/waypoints/filtered_thermals.csv
+  - CUP:  outputs/waypoints/filtered_thermals.cup
+  - KML:  outputs/waypoints/filtered_thermals.kml
+
+Labels in CUP/KML are numeric strength with 1 decimal (e.g. "2.8").
+
+Waypoints source:
+  - "gcwa extended.cup" (supports DDMM.mmmH like 3222.447S,11716.745E).
+
+Thermals source (auto):
+  - Primary: "consolidated_thermal_coords.csv" (lat,lon,strength)
+  - Fallback: "outputs/waypoints/thermal_waypoints_v1.csv"
+              (prefers strength_mean_core; else any strength_*; else strength)
 """
 
 import csv
 import math
 import re
 from pathlib import Path
+from typing import List, Dict, Tuple
 
-# --- Configuration ---
-WAYPOINT_FILE     = "gcwa extended.cup"
-INPUT_FILE        = "consolidated_thermal_coords.csv"
-FALLBACK_WP_FILE  = "outputs/waypoints/thermal_waypoints_v1.csv"
+# ---------- Paths ----------
+WAYPOINT_FILE       = "gcwa extended.cup"
+THERMALS_FILE       = "outputs/waypoints/thermal_waypoints_v1.csv"  # primary & only
 
-OUTDIR            = Path("outputs/waypoints")
+OUTDIR              = Path("outputs/waypoints")
 OUTDIR.mkdir(parents=True, exist_ok=True)
-OUTPUT_CSV_FILE   = OUTDIR / "filtered_thermals.csv"
-OUTPUT_CUP_FILE   = OUTDIR / "filtered_thermals.cup"
-OUTPUT_KML_FILE   = OUTDIR / "filtered_thermals.kml"
+OUTPUT_CSV_FILE     = OUTDIR / "filtered_thermals.csv"
+OUTPUT_CUP_FILE     = OUTDIR / "filtered_thermals.cup"
+OUTPUT_KML_FILE     = OUTDIR / "filtered_thermals.kml"
 
 EARTH_R_KM = 6371.0
 
@@ -32,90 +59,187 @@ EARTH_R_KM = 6371.0
 def deg2rad(d): return d * math.pi / 180.0
 def rad2deg(r): return r * 180.0 / math.pi
 
-def haversine_km(lat1, lon1, lat2, lon2):
+def haversine_km(lat1, lon1, lat2, lon2) -> float:
     φ1, λ1, φ2, λ2 = map(deg2rad, [lat1, lon1, lat2, lon2])
     dφ, dλ = φ2 - φ1, λ2 - λ1
     a = math.sin(dφ/2)**2 + math.cos(φ1)*math.cos(φ2)*math.sin(dλ/2)**2
     return 2 * EARTH_R_KM * math.asin(min(1.0, math.sqrt(a)))
 
-def initial_bearing_deg(lat1, lon1, lat2, lon2):
+def initial_bearing_deg(lat1, lon1, lat2, lon2) -> float:
     φ1, λ1, φ2, λ2 = map(deg2rad, [lat1, lon1, lat2, lon2])
     dλ = λ2 - λ1
     y = math.sin(dλ) * math.cos(φ2)
     x = math.cos(φ1)*math.sin(φ2) - math.sin(φ1)*math.cos(φ2)*math.cos(dλ)
-    return (rad2deg(math.atan2(y, x)) + 360) % 360
+    return (rad2deg(math.atan2(y, x)) + 360.0) % 360.0
 
-def bearing_diff_abs(a, b):
-    return abs((a - b + 540) % 360 - 180)
+def cross_track_along_track_km(s_lat, s_lon, e_lat, e_lon, p_lat, p_lon):
+    """
+    Robust local-plane projection:
+      - Convert lon/lat deltas to km in a local ENU frame anchored near the leg.
+      - Return (cross_km, along_km) where along is signed:
+          along < 0   → point is before START
+          along > L   → point is beyond END
+    """
+    # Local scale factors (km per degree); anchor at mid-lat to minimize distortion
+    lat0_rad = math.radians((s_lat + e_lat) * 0.5)
+    kx = math.cos(lat0_rad) * 111.320  # km / deg longitude
+    ky = 110.574                       # km / deg latitude
 
-def cross_track_along_track_km(lat1, lon1, lat2, lon2, latp, lonp):
-    d_ab = haversine_km(lat1, lon1, lat2, lon2) / EARTH_R_KM
-    d_ap = haversine_km(lat1, lon1, latp, lonp) / EARTH_R_KM
-    if d_ab == 0:
-        return haversine_km(lat1, lon1, latp, lonp), 0.0
-    br_ab = deg2rad(initial_bearing_deg(lat1, lon1, lat2, lon2))
-    br_ap = deg2rad(initial_bearing_deg(lat1, lon1, latp, lonp))
-    xt_ang = math.asin(max(-1, min(1, math.sin(d_ap) * math.sin(br_ap - br_ab))))
-    xtrack_km = abs(xt_ang) * EARTH_R_KM
-    cos_at = max(-1, min(1, math.cos(d_ap) / max(1e-12, math.cos(xt_ang))))
-    at_ang = math.acos(cos_at)
-    along_km = at_ang * EARTH_R_KM
-    return xtrack_km, along_km
+    # Vector from START to END in ENU km
+    ax = (e_lon - s_lon) * kx
+    ay = (e_lat - s_lat) * ky
+    L  = math.hypot(ax, ay)
+    if L == 0:
+        # Degenerate leg: cross is straight-line distance from START
+        px = (p_lon - s_lon) * kx
+        py = (p_lat - s_lat) * ky
+        return math.hypot(px, py), 0.0
 
+    # Unit vector along the leg
+    ux, uy = ax / L, ay / L
+
+    # Vector from START to point P in ENU km
+    px = (p_lon - s_lon) * kx
+    py = (p_lat - s_lat) * ky
+
+    # Signed along-track (km) via dot product, and cross-track magnitude (km)
+    along = px * ux + py * uy
+    cx = px - along * ux
+    cy = py - along * uy
+    cross = math.hypot(cx, cy)
+    return cross, along
 # =========================
-# CUP coordinate parsing
+# CUP parsing + waypoint reader
 # =========================
 def parse_cup_coord(coord: str) -> float:
-    s = (coord or "").strip().replace("°", ":").replace("º", ":").replace(" ", "")
-    # S31:39.123
+    """
+    Parse CUP/coordinate strings to signed decimal degrees.
+
+    Accepts:
+      - 'S31:39.123' / 'E116:52.345'           (CUP with colon)
+      - '3222.447S' / '11716.745E'             (CUP, no colon, hemi suffix) or 'S3222.447' (prefix)
+      - Decimal with optional hemisphere: 'S31.654' / '116.875E' / '-31.654'
+    """
+    s = (coord or "").strip()
+    if not s:
+        raise ValueError("empty coord")
+    s = s.replace("°", ":").replace("º", ":").replace(" ", "")
+
+    # (1) CUP with colon
     m = re.match(r'^([NSEW])(\d{1,3}):(\d{1,2}(?:\.\d+)?)$', s, re.I)
     if m:
         hemi, degs, mins = m.group(1).upper(), int(m.group(2)), float(m.group(3))
-        val = degs + mins/60
+        val = degs + mins/60.0
         return -val if hemi in ('S','W') else val
-    # 3222.447S
+
+    # (2) No colon, hemi prefix/suffix, minutes embedded
     m = re.match(r'^([NSEW])?(\d{2,3})(\d{2}(?:\.\d+)?)([NSEW])?$', s, re.I)
     if m:
         hemi1, degs, mins, hemi2 = (m.group(1) or "").upper(), int(m.group(2)), float(m.group(3)), (m.group(4) or "").upper()
         hemi = hemi1 or hemi2
-        val = degs + mins/60
+        val = degs + mins/60.0
         return -abs(val) if hemi in ('S','W') else abs(val)
-    # Decimal
+
+    # (3) Decimal with optional hemi
+    m = re.match(r'^([NSEW])?([+-]?\d+(?:\.\d+)?)([NSEW])?$', s, re.I)
+    if m:
+        hemi1, num, hemi2 = (m.group(1) or "").upper(), float(m.group(2)), (m.group(3) or "").upper()
+        hemi = hemi1 or hemi2
+        val = num
+        if hemi in ('S','W'):
+            val = -abs(val)
+        elif hemi in ('N','E'):
+            val = abs(val)
+        return val
+
     return float(s)
 
 def convert_to_cup_coord(value: float, is_lat: bool) -> str:
-    hemi = "N" if is_lat and value >= 0 else "S" if is_lat else "E" if value >= 0 else "W"
+    hemi = ("N" if value >= 0 else "S") if is_lat else ("E" if value >= 0 else "W")
     v = abs(value)
     deg = int(v)
-    mins = (v - deg) * 60
+    mins = (v - deg) * 60.0
     if is_lat:
         return f"{deg:02d}{mins:06.3f}{hemi}"
     else:
         return f"{deg:03d}{mins:06.3f}{hemi}"
 
-# =========================
-# Filtering
-# =========================
-def is_within_cone_and_corridor(lat, lon, s_lat, s_lon, e_lat, e_lon, cone_deg, tol_km):
-    leg_bearing = initial_bearing_deg(s_lat, s_lon, e_lat, e_lon)
-    thr_bearing = initial_bearing_deg(s_lat, s_lon, lat, lon)
-    if bearing_diff_abs(leg_bearing, thr_bearing) > (cone_deg/2):
-        return False
-    xtrack, along = cross_track_along_track_km(s_lat, s_lon, e_lat, e_lon, lat, lon)
-    leg_len = haversine_km(s_lat, s_lon, e_lat, e_lon)
-    return 0 <= along <= leg_len and xtrack <= tol_km
+def read_waypoints_from_cup(path: str) -> List[Dict]:
+    p = Path(path)
+    if not p.exists():
+        print(f"[ERROR] Waypoint file not found: {p}")
+        return []
+    rows = []
+    with p.open("r", encoding="utf-8", errors="ignore") as f:
+        rdr = csv.DictReader((ln for ln in f if not ln.lstrip().startswith("*") and ln.strip()))
+        if not rdr.fieldnames:
+            print(f"[WARN] No headers in {p.name}")
+            return []
+        for r in rdr:
+            try:
+                name = (r.get("Title") or r.get("Name") or "").strip().strip('"')
+                code = (r.get("Code")  or name).strip().strip('"')
+                lat  = parse_cup_coord(r["Latitude"])
+                lon  = parse_cup_coord(r["Longitude"])
+                rows.append({"name": name or "WP", "code": code, "lat": lat, "lon": lon})
+            except Exception:
+                continue
+    if not rows:
+        print(f"[WARN] No usable waypoints found in {p.name}")
+    else:
+        print(f"[INFO] Loaded {len(rows)} waypoints from {p.name}")
+    return rows
 
 # =========================
-# Writers
+# Thermals reader
 # =========================
-def write_cup_file(rows, path):
-    with open(path, "w", newline="") as f:
+def read_thermals(thermals_path: str) -> List[Dict]:
+    """
+    Read thermals from thermal_waypoints_v1.csv.
+    Returns [{lat, lon, strength}], preferring strength_mean_core,
+    else any strength_* column, else 'strength' if present.
+    """
+    p = Path(thermals_path)
+    if not p.exists():
+        raise FileNotFoundError(f"Input not found: {thermals_path}")
+
+    out: List[Dict] = []
+    with p.open("r", newline="") as f:
+        rdr = csv.DictReader(f)
+        header = [h.strip() for h in (rdr.fieldnames or [])]
+
+        # choose best strength column
+        if "strength_mean_core" in header:
+            prefer = "strength_mean_core"
+        else:
+            cand = [c for c in header if c.lower().startswith("strength_")]
+            prefer = cand[0] if cand else ("strength" if "strength" in header else None)
+
+        for row in rdr:
+            try:
+                lat = float(str(row["lat"]).strip().strip('"'))
+                lon = float(str(row["lon"]).strip().strip('"'))
+                if prefer and row.get(prefer, "") != "":
+                    strength = float(str(row[prefer]).strip().strip('"'))
+                else:
+                    # if no strength column, skip
+                    continue
+                out.append({"lat": lat, "lon": lon, "strength": strength})
+            except Exception:
+                continue
+    return out
+
+# =========================
+# Writers (numeric strength labels)
+# =========================
+def write_cup_points(rows: List[Dict], path: Path):
+    with path.open("w", newline="") as f:
         w = csv.writer(f)
         w.writerow(["Title","Code","Country","Latitude","Longitude","Elevation",
                     "Style","RWY Dir","RWY Len","Freq","Desc"])
         for i, r in enumerate(rows, 1):
             label = f"{float(r['strength']):.1f}"  # number only
-            code = f"STR{i:03d}"
+            code  = f"STR{i:03d}"
             w.writerow([
                 label, code, "",
                 convert_to_cup_coord(r["lat"], True),
@@ -123,8 +247,8 @@ def write_cup_file(rows, path):
                 "0ft","1","","","",""
             ])
 
-def write_kml_file(rows, path):
-    with open(path, "w") as f:
+def write_kml_points(rows: List[Dict], path: Path):
+    with path.open("w") as f:
         f.write('<?xml version="1.0" encoding="UTF-8"?>\n')
         f.write('<kml xmlns="http://www.opengis.net/kml/2.2"><Document>\n')
         for r in rows:
@@ -134,83 +258,112 @@ def write_kml_file(rows, path):
         f.write('</Document></kml>\n')
 
 # =========================
+# Input helpers
+# =========================
+def get_float_input(prompt: str, default: float) -> float:
+    while True:
+        raw = input(f"{prompt} [{default}]: ").strip()
+        if not raw:
+            return default
+        try:
+            return float(raw)
+        except Exception:
+            print("Please enter a valid number.")
+
+# =========================
+# Diamond keeper
+# =========================
+def keep_point_diamond(lat, lon, s_lat, s_lon, e_lat, e_lon, cone_deg):
+    """
+    Diamond/lens sector filter.
+      - L = |SE|
+      - f = along/L
+      - allowed lateral = min(f, 1-f) * L * tan(alpha), alpha = cone_deg/2
+    Keep iff 0 <= along <= L and cross_track <= allowed.
+    """
+    L = haversine_km(s_lat, s_lon, e_lat, e_lon)
+    if L <= 0:
+        return False
+
+    xtrack_km, along_km = cross_track_along_track_km(s_lat, s_lon, e_lat, e_lon, lat, lon)
+    if along_km < 0 or along_km > L:
+        return False
+
+    alpha = math.radians(cone_deg / 2.0)
+    allowed_km = min(along_km, L - along_km) * math.tan(alpha)
+    return xtrack_km <= (allowed_km + 1e-6)
+
+# =========================
 # Main
 # =========================
 def main():
     print(f"Reading waypoints from '{WAYPOINT_FILE}'...")
-    waypoints = []
-    with open(WAYPOINT_FILE, newline="") as f:
-        rdr = csv.DictReader(f)
-        for r in rdr:
-            try:
-                lat = parse_cup_coord(r["Latitude"])
-                lon = parse_cup_coord(r["Longitude"])
-                waypoints.append({"name": r["Title"], "lat": lat, "lon": lon})
-            except Exception:
-                continue
+    waypoints = read_waypoints_from_cup(WAYPOINT_FILE)
     if not waypoints:
-        print("No usable waypoints found.")
+        print(f"[WARN] No usable waypoints found in {WAYPOINT_FILE}")
         return 1
 
     print("\nAvailable Waypoints:")
     for i, wp in enumerate(waypoints, 1):
-        print(f"[{i}] {wp['name']}")
+        code = f" ({wp['code']})" if 'code' in wp and wp['code'] else ""
+        print(f"[{i}] {wp['name']}{code}")
 
-    def choose(prompt):
+    def choose(label):
         while True:
             try:
-                n = int(input(f"Enter {prompt} waypoint number: "))
+                n = int(input(f"Enter {label} waypoint number: "))
                 if 1 <= n <= len(waypoints):
                     return waypoints[n-1]
             except Exception:
                 pass
-            print("Invalid choice.")
+            print(f"Enter a number between 1 and {len(waypoints)}.")
 
     start = choose("start")
     end   = choose("end")
 
-    cone_angle = float(input("Enter cone angle (deg): ") or "30")
-    total_dist = haversine_km(start["lat"], start["lon"], end["lat"], end["lon"])
-    tolerance  = (total_dist/2) * math.tan(math.radians(cone_angle/2))
+    cone_angle = get_float_input("Enter the cone angle (deg)", 30.0)
 
-    print(f"\nFiltering thermals with cone {cone_angle}°, tolerance {tolerance:.1f} km")
+    print(f"\nFiltering thermals for leg '{start['name']}' → '{end['name']}'")
+    print(f"Cone angle: {cone_angle:.1f}°")
 
-    infile = Path(INPUT_FILE)
-    if not infile.exists():
-        infile = Path(FALLBACK_WP_FILE)
+    # Load thermals
+    try:
+        thermals = read_thermals(THERMALS_FILE)
+        print(f"[INFO] Using {THERMALS_FILE}")
+    except FileNotFoundError as e:
+        print(str(e))
+        return 1
 
-    filtered = []
-    with infile.open(newline="") as f:
-        rdr = csv.DictReader(f)
-        for row in rdr:
-            try:
-                lat = float(row["lat"]); lon = float(row["lon"])
-                strength = float(row.get("strength") or row.get("strength_mean_core") or 0)
-                if is_within_cone_and_corridor(lat, lon,
-                                               start["lat"], start["lon"],
-                                               end["lat"], end["lon"],
-                                               cone_angle, tolerance):
-                    filtered.append({"lat": lat, "lon": lon, "strength": strength})
-            except Exception:
-                continue
+    print(f"Loaded {len(thermals)} thermals. Filtering…")
+    kept: List[Dict] = []
+    for r in thermals:
+        if keep_point_diamond(r["lat"], r["lon"],
+                              start["lat"], start["lon"],
+                              end["lat"],   end["lon"],
+                              cone_angle):
+            kept.append(r)
 
-    if not filtered:
-        print("No thermals found in range.")
-        return 0
+    print(f"Kept {len(kept)} / {len(thermals)} ({(len(kept)/max(1,len(thermals)))*100:.1f}%).")
 
-    # Write outputs
-    with open(OUTPUT_CSV_FILE, "w", newline="") as f:
-        w = csv.writer(f); w.writerow(["lat","lon","strength"])
-        for r in filtered: w.writerow([r["lat"], r["lon"], r["strength"]])
+    # Always write CSV (empty if none kept)
+    with OUTPUT_CSV_FILE.open("w", newline="") as f:
+        w = csv.writer(f)
+        w.writerow(["lat","lon","strength"])
+        for r in kept:
+            w.writerow([r["lat"], r["lon"], r["strength"]])
 
-    write_cup_file(filtered, OUTPUT_CUP_FILE)
-    write_kml_file(filtered, OUTPUT_KML_FILE)
+    if kept:
+        write_cup_points(kept, OUTPUT_CUP_FILE)
+        write_kml_points(kept, OUTPUT_KML_FILE)
+        print("Outputs:")
+        print(f"  {OUTPUT_CSV_FILE}")
+        print(f"  {OUTPUT_CUP_FILE}")
+        print(f"  {OUTPUT_KML_FILE}")
+    else:
+        print(f"Wrote empty {OUTPUT_CSV_FILE}. (No CUP/KML created.)")
 
-    print(f"\nWrote {len(filtered)} thermals →")
-    print(f"  {OUTPUT_CSV_FILE}")
-    print(f"  {OUTPUT_CUP_FILE}")
-    print(f"  {OUTPUT_KML_FILE}")
     return 0
+
 
 if __name__ == "__main__":
     raise SystemExit(main())

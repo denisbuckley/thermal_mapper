@@ -588,7 +588,7 @@ def match_clusters(circle_clusters: pd.DataFrame,
 # -------------------- Ensure IGC copy into run_dir --------------------
 import shutil, gzip
 
-def ensure_igc_copy(stem: str, run_dir: Path, src_root: Path = Path("igc")) -> bool:
+def ensure_igc_copy(stem: str, run_dir: Path, src_root: Path = Path("../igc")) -> bool:
     run_dir.mkdir(parents=True, exist_ok=True)
     dest = run_dir / f"{stem}.igc"
     if dest.exists() and dest.stat().st_size > 0:

@@ -12,8 +12,8 @@ import os, sys, argparse, logging
 import numpy as np
 import pandas as pd
 
-OUTPUT_DIR = "outputs"
-DEBUG_DIR  = "debugs"
+OUTPUT_DIR = "../outputs"
+DEBUG_DIR  = "../debugs"
 os.makedirs(OUTPUT_DIR, exist_ok=True)
 os.makedirs(DEBUG_DIR, exist_ok=True)
 

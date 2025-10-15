@@ -96,7 +96,7 @@ def main():
 
     df = pd.DataFrame(list(vals.items()), columns=["name","value"])
 
-    os.makedirs("config", exist_ok=True)
+    os.makedirs("../config", exist_ok=True)
     out = "config/tuning_params.csv"
     df.to_csv(out, index=False)
     print(f"\nSaved {len(df)} parameters to {out}")

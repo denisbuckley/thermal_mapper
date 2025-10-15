@@ -477,8 +477,6 @@ def main() -> int:
     d.to_csv(out_csv, index=False)
     print(f"[OK] wrote {len(d)} circles → {out_csv}")
 
-    return 0
-
 if __name__ == "__main__":
     raise SystemExit(main())
 

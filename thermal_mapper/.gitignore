@@ -37,16 +37,3 @@ igc_subset/*
 
 # data inputs
 igc/
-venv/
-outputs/
-*.csv
-*.geojson
-*.kml
-*.cup
-*.png
-*.log
-__pycache__/
-*.py[cod]
-.idea/
-.vscode/
-.DS_Store

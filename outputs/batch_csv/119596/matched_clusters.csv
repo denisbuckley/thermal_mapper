@@ -1,2 +1,0 @@
-lat,lon,climb_rate_ms,alt_gain_m,duration_s,circle_cluster_id,alt_cluster_id,circle_lat,circle_lon,alt_lat,alt_lon,dist_m,time_overlap_s,overlap_frac
--31.78645349878625,116.81821838157668,3.3962264150943398,180.0,53.0,3,3,-31.786828911152746,116.81839972611633,-31.786078086419753,116.81803703703703,90.25189786995666,53.0,1.0

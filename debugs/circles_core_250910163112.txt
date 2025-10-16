@@ -1,6 +1,0 @@
-[circles-core] Parsing IGC: 2020-11-08 Lumpy Paterson 108645.igc
-[circles-core] Tow detected: 0→483. Excluding tow.
-[circles-core] Points after tow trim: 8147
-[circles-core] Cadence ≈ 3.00 s/fix | circles detected: 22
-[circles-core] Valley-merge reduced clusters: 22 → 22
-[circles-core] Wrote: circles_turns_250910163112.csv (22 rows), circles_clusters_250910163112.csv (22 rows), circles_cluster_pairs_250910163112.csv (21 rows) in ./outputs

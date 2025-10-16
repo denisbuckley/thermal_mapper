@@ -1,6 +1,0 @@
-[2025-10-14 08:38:43] ===== batch_run_v3.1 start =====
-[2025-10-14 08:38:43] IGC: /Users/denisbuckley/PycharmProjects/chatgpt_igc/igc/342538.igc
-[2025-10-14 08:38:43] RUN_DIR: /Users/denisbuckley/PycharmProjects/chatgpt_igc/outputs/batch_csv/342538
-[2025-10-14 08:38:43] TUNING: circle_eps_m=300.0, circle_min_samples=3, alt_min_gain=100.0, alt_min_duration=10.0, match_max_dist_m=1000.0, match_min_overlap=0.1, circle(min_dur=15.0, max_dur=32.0, min_r=50.0, max_r=200.0, min_bank=25.0, vmax_climb=7.0)
-[2025-10-14 08:38:43] [INFO] Tow cut at idx=52, samples left=3000
-[2025-10-14 08:38:43] [OK] wrote circles=110, cc=12, alts=21, matches=10

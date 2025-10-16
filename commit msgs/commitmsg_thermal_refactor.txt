@@ -1,1 +1,0 @@
-refactor: thermal clustering v1 to import core functions from igc_utils

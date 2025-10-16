@@ -1,52 +1,29 @@
-# === Python ===
-__pycache__/
-*.py[cod]
-*.pyo
-*.pyd
-*.so
-
-# === Virtual envs ===
-venv/
-.env/
-.venv/
-
-# === IDEs ===
-.idea/
-.vscode/
-
-# === Local commit message drafts ===
+# build + data outputs
+outputs/
+batch_csv/
+weglide_igc/
+igc_orig/
+igc_subset/
+backups/
+debugs/
+parking/
+support files/
 commit msgs/
 
-# === OS cruft ===
-.DS_Store
-Thumbs.db
-
-# === Flight analysis logs ===
-*_cluster_*.txt
-altitude_gain_*.txt
-circles_debug_*.txt
-
-# === Local drafts ===
-drafts/
-
-# Ignore local flight logs
-igc_subset/*
-
-# Ignore local flight logs
-igc_subset/*
-
-# data inputs
-igc/
-venv/
-outputs/
+# artifacts
 *.csv
 *.geojson
 *.kml
 *.cup
 *.png
 *.log
+
+# Python cruft
 __pycache__/
 *.py[cod]
+*.egg-info/
+
+# IDE & OS
 .idea/
 .vscode/
 .DS_Store

@@ -16,3 +16,16 @@ The repository also includes scripts for batch processing, statistical analysis,
 - **Batch processing**: Run the full pipeline across multiple IGC files.
 - **WeGlide scraping**: Optional Bash scripts for collecting `.igc` files automatically.
 - **Outputs**: Per-flight CSVs and JSON stats for downstream analysis and visualization.
+
+---
+
+## Installation
+
+Clone the repository and set up a Python environment:
+
+```bash
+git clone https://github.com/<your-org>/thermal_mapper.git
+cd thermal_mapper
+python3 -m venv .venv
+source .venv/bin/activate
+pip install -r requirements.txt

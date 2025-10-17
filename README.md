@@ -10,12 +10,15 @@ The repository also includes scripts for batch processing, statistical analysis,
 
 ## Features
 
-- **Circle detection**: Identify circling segments with radius, bank angle, and climb rate.
+- **Circle detection**: Identify circles with duration, radius, bank angle, speed and climb rate.
+- **Circle clusters**: Cluster circles associated in time and space to identify thermalling flight.
 - **Altitude clusters**: Detect climb phases from smoothed altitude traces.
 - **Cluster matching**: Combine circle and altitude clusters into unified thermal events.
 - **Batch processing**: Run the full pipeline across multiple IGC files.
 - **WeGlide scraping**: Optional Bash scripts for collecting `.igc` files automatically.
-- **Outputs**: Per-flight CSVs and JSON stats for downstream analysis and visualization.
+- **Outputs**: Per-flight CSVs and JSON stats for downstream analysis.
+- **Visuals**: Plot interactive track and altitude with clusters and thermals.
+- **Thermal waypoints** Geojson, kml, cup and csv output for Google Earth and flight computer
 
 ---
 
@@ -39,7 +42,7 @@ ___
 
 ### Batch Mode
 
-Run batch *.igc files, default directory <project root>/igc
+Run batch *.igc files in default directory <project root>/igc
 
 ```bash
 python batch_run_v3.1.py
@@ -70,8 +73,15 @@ Run standalone scripts to find optimal tuning in the following order:
 
 ```
 python circles_from_brecords_v1e.py
-python altitude_clusters_v1.py
 python circle_clusters_v1s.py
+python altitude_clusters_v1.py
 python match_clusters_v1.py
 ```
+___
 
+## Task Filter 
+
+Select task waypoints from .cup file to filter thermal waypoints within optional deviation from flight path, accepts multiple turnpoints.
+```bash
+python thermal_filter_v1a.py
+```

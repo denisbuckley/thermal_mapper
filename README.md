@@ -32,3 +32,7 @@ pip install -r requirements.txt
 
 Python 3.11+ recommended.
 Tested on macOS, should work on Linux.
+
+---
+
+## Usage

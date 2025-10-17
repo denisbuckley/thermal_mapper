@@ -35,4 +35,6 @@ Tested on macOS, should work on Linux.
 ```
 ___
 
-# Usage
+## Usage
+
+### Batch Mode

@@ -101,8 +101,7 @@ A Bash script can download flights from WeGlide (by region and date range):
 
 ```bash
 ./weglide_igc_scrape.sh
----
-
+```
 ---
 
 ## License

@@ -39,7 +39,7 @@ ___
 
 ### Batch Mode
 
-Run bulk *.igc files
+Run batch *.igc files, default directory <project root>/igc
 
 ```bash
 python batch_run_v3.1.py

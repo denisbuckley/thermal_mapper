@@ -17,6 +17,7 @@ commit msgs/
 *.cup
 *.png
 *.log
+*.igc
 
 # Python cruft
 __pycache__/

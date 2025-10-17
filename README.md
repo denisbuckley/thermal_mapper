@@ -32,17 +32,17 @@ cd thermal_mapper
 python3 -m venv .venv
 source .venv/bin/activate
 pip install -r requirements.txt
-
+```
 Python 3.11+ recommended.
 Tested on macOS, should work on Linux.
-```
-___
+
+---
 
 ## Usage
 
 ### Batch Mode
 
-Run batch *.igc files in default directory <project root>/igc
+Run batch *.igc files in default directory <project root>/igc.
 
 ```bash
 python batch_run_v3.1.py
@@ -51,25 +51,33 @@ python sweep_eps_for_thermals.py
 python track_plotter_batch_v1b.py
 python match_clusters_v1.py
 ```
-___
+---
 
 ### Single *.igc Mode
 
-Run a single *.igc file and return a plot showing track, circle/altitude and matched clusters with thermals
+Run a single *.igc file and return a plot showing track, circle/altitude and matched clusters with thermals.
 
 ``` bash
 python pipeline_v4.1j.py
 
 ```
-___
+---
+### Outputs
 
+Each flight generates a subfolder under `outputs/batch_csv/<flight>` containing:
+- **circles.csv** — individual circling events with climb, radius, bank, etc.
+- **circle_clusters_enriched.csv** — grouped circle clusters with summary stats.
+- **altitude_clusters.csv** — altitude-based climb segments.
+- **matched_clusters.csv / matched_clusters.json** — combined circle/altitude matches and stats.
+- **pipeline_debug.log** — per-flight debug log.
+
+A global log is written to `outputs/batch_debug.log`.
+
+--- 
 ### Tuning
 
-All scripts call settings from 
-``` bash
-tuning.json
-```
-Run standalone scripts to find optimal tuning in the following order:
+All scripts use shared settings from `tuning.json`.  
+To explore tuning, run the standalone scripts in the following order:  
 
 ```
 python circles_from_brecords_v1e.py
@@ -77,7 +85,7 @@ python circle_clusters_v1s.py
 python altitude_clusters_v1.py
 python match_clusters_v1.py
 ```
-___
+---
 
 ## Task Filter 
 
@@ -85,3 +93,19 @@ Select task waypoints from .cup file to filter thermal waypoints within optional
 ```bash
 python thermal_filter_v1a.py
 ```
+---
+
+### WeGlide IGC Scraping (Optional)
+
+A Bash script can download flights from WeGlide (by region and date range):
+
+```bash
+./weglide_igc_scrape.sh
+---
+
+---
+
+## License
+
+This project is licensed under the [MIT License](LICENSE).  
+You are free to use, modify, and distribute this software, subject to the conditions of the license.

@@ -66,9 +66,7 @@ All scripts call settings from
 ``` bash
 tuning.json
 ```
-Standalone scripts to find optimal tuning.
-
-Run scripts in the following order:
+Run standalone scripts to find optimal tuning in the following order:
 
 ```
 python circles_from_brecords_v1e.py

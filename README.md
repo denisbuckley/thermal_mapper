@@ -50,7 +50,7 @@ python match_clusters_v1.py
 ```
 ___
 
-### Single *.igc file
+### Single *.igc Mode
 
 Run a single *.igc file and return a plot showing track, circle/altitude and matched clusters with thermals
 

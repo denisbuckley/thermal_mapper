@@ -62,6 +62,10 @@ ___
 
 ### Tuning
 
+All scripts call settings from 
+``` bash
+tuning.json
+```
 Standalone scripts to find optimal tuning.
 
 Run scripts in the following order:

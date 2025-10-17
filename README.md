@@ -35,5 +35,5 @@ Tested on macOS, should work on Linux.
 
 ---
 
-# Usage
+# **head**
 

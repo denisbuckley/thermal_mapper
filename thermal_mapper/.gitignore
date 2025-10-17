@@ -1,0 +1,96 @@
+# === Python ===
+__pycache__/
+*.py[cod]
+*.pyo
+*.pyd
+*.so
+
+# === Virtual envs ===
+venv/
+.env/
+.venv/
+
+# === IDEs ===
+.idea/
+.vscode/
+
+# === Local commit message drafts ===
+commit msgs/
+
+# === OS cruft ===
+.DS_Store
+Thumbs.db
+
+# === Flight analysis logs ===
+*_cluster_*.txt
+altitude_gain_*.txt
+circles_debug_*.txt
+
+# === Local drafts ===
+drafts/
+
+# Ignore local flight logs
+igc_subset/*
+
+# Ignore local flight logs
+igc_subset/*
+
+# data inputs
+igc/
+archive/
+backups/
+batch_csv/
+commit msgs/
+config/
+debugs/
+docs/
+drafts/
+igc_orig/
+igc_subset/
+outputs/
+parking/
+support files/
+thermal_mapper/
+
+# Ignore OS/editor cruft
+.DS_Store
+.idea/
+__pycache__/
+*.pyc
+
+# Ignore debug/temp/cache files
+.ids.tmp
+.last_igc
+.last_igc.txt
+.last_igc_path
+.last_igc_path.txt
+.wg_list.json
+.wg_page.html
+_batch_debug.log
+
+# Old/deprecated scripts & analysis
+altitude_clusters_from_brecords_v1.py
+bank_vs_climb_analysis.py
+circles_covariance_analysis.py
+main.py
+
+# Logs and runtime markers
+failed_weglide_ids.log
+_batch_debug.log
+.last_igc
+.last_igc.txt
+.last_igc_path
+.last_igc_path.txt
+.ids.tmp
+.wg_list.json
+.wg_page.html
+
+# Generated data/outputs
+circles.csv
+filtered_thermals.csv
+filtered_thermals.cup
+filtered_thermals.kml
+
+# Backups/docs not needed in repo
+weglide_bulk.sh.save
+workflow summary.rtf

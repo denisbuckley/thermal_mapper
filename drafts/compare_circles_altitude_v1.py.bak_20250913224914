@@ -1,0 +1,142 @@
+
+import math
+from pathlib import Path
+from datetime import datetime
+import numpy as np
+import pandas as pd
+
+from igc_utils import parse_igc, compute_derived, detect_tow_segment
+
+R_EARTH_M = 6371000.0
+
+# ---------- Tunables (comparison) ----------
+# Spatial match radius between cluster centers
+MATCH_EPS_M = 2000.0
+# If no direct time overlap, allow this max gap to still consider a match
+MATCH_GAP_S = 900.0
+
+def ts_stamp() -> str:
+    return datetime.now().strftime("%y%m%d%H%M%S")
+
+def ensure_dir(p: Path) -> None:
+    p.mkdir(parents=True, exist_ok=True)
+
+def haversine_m(lat1, lon1, lat2, lon2):
+    lat1, lon1, lat2, lon2 = map(np.radians, [lat1, lon1, lat2, lon2])
+    dlat = lat2 - lat1
+    dlon = lon2 - lon1
+    a = np.sin(dlat/2)**2 + np.cos(lat1)*np.cos(lat2)*np.sin(dlon/2)**2
+    return 2*R_EARTH_M*np.arcsin(np.sqrt(a))
+
+# ---- Circle detection (same as v1f imports indirectly) ----
+# We import from the overlay_v1f script by reusing its functions if present,
+# but to keep this file standalone, we re-implement the small bits we need.
+
+def ensure_time_sec(df: pd.DataFrame) -> pd.DataFrame:
+    df = df.copy()
+    if not np.issubdtype(df['time'].dtype, np.datetime64):
+        df['time'] = pd.to_datetime(df['time'], errors='coerce')
+    if 'sec' not in df.columns:
+        df['sec'] = (df['time'] - df['time'].iloc[0]).dt.total_seconds().astype(float)
+    return df
+
+# --- We pull the circle + altitude detectors from overlay_circles_altitude_v1f.py by reading that file if present
+# to avoid duplication. Fallback to minimal definitions if not.
+def _load_helpers():
+    import importlib.util, sys
+    helper_path = Path.cwd() / "overlay_circles_altitude_v1f.py"
+    if helper_path.exists():
+        spec = importlib.util.spec_from_file_location("overlay_helpers", helper_path)
+        mod = importlib.util.module_from_spec(spec)
+        sys.modules["overlay_helpers"] = mod
+        spec.loader.exec_module(mod)  # type: ignore
+        return mod
+    else:
+        raise RuntimeError("overlay_circles_altitude_v1f.py not found in CWD — place it next to this script.")
+
+def main():
+    helpers = _load_helpers()
+    igc_file = "2020-11-08 Lumpy Paterson 108645.igc"
+
+    df = parse_igc(igc_file)
+    df = compute_derived(df)
+    df = ensure_time_sec(df)
+
+    try:
+        tow = detect_tow_segment(df)
+    except Exception:
+        tow = None
+    if isinstance(tow, tuple) and len(tow) == 2:
+        s, e = tow
+        df = df.iloc[e+1:].reset_index(drop=True)
+        df = ensure_time_sec(df)
+
+    # Circles -> clusters
+    circles, dt = helpers.detect_circles_multi(df)
+    circ_df = helpers.circles_to_df(df, circles)
+    circ_with_cluster, circ_clusters_df = helpers.circle_clusters(circ_df)
+
+    # Altitude clusters
+    alt_clusters_df, _ = helpers.detect_climbs_altitude(df)
+
+    # Build comparison rows: for each altitude T, find nearest circle cluster within MATCH_EPS_M
+    rows = []
+    if not alt_clusters_df.empty and not circ_clusters_df.empty:
+        # Prep for temporal overlap
+        A = alt_clusters_df.copy()
+        A['t0'] = pd.to_datetime(A['start_time'])
+        A['t1'] = pd.to_datetime(A['end_time'])
+        C = circ_clusters_df.copy()
+        C['t0'] = pd.to_datetime(C['start_time'])
+        C['t1'] = pd.to_datetime(C['end_time'])
+
+        for _, ar in A.iterrows():
+            best = None
+            for _, cr in C.iterrows():
+                dist_m = float(haversine_m(ar['lat_mid'], ar['lon_mid'], cr['center_lat'], cr['center_lon']))
+                if dist_m <= MATCH_EPS_M:
+                    # temporal overlap (seconds)
+                    latest_start = max(ar['t0'], cr['t0'])
+                    earliest_end = min(ar['t1'], cr['t1'])
+                    overlap_s = max(0.0, (earliest_end - latest_start).total_seconds())
+                    # if no overlap, compute minimum gap
+                    if overlap_s == 0:
+                        # gaps both ways
+                        gap1 = (cr['t0'] - ar['t1']).total_seconds()
+                        gap2 = (ar['t0'] - cr['t1']).total_seconds()
+                        min_gap = max(0.0, min(gap1, gap2))
+                    else:
+                        min_gap = 0.0
+                    score = (dist_m, -overlap_s, min_gap)
+                    if best is None or score < best[0]:
+                        best = (score, cr, dist_m, overlap_s, min_gap)
+            rows.append(dict(
+                thermal_id=int(ar['thermal_id']),
+                thermal_gain_m=float(ar['gain_m']),
+                thermal_dur_s=float(ar['duration_s']),
+                thermal_time=str(ar['start_time']) + " → " + str(ar['end_time']),
+                thermal_lat=float(ar['lat_mid']), thermal_lon=float(ar['lon_mid']),
+                match_cluster_id = int(best[1]['cluster_id']) if best else None,
+                match_dist_m = float(best[2]) if best else None,
+                time_overlap_s = float(best[3]) if best else 0.0,
+                time_gap_s = float(best[4]) if best else None,
+                cluster_n_circles = int(best[1]['n']) if best else None,
+                cluster_mean_radius_m = float(best[1]['mean_radius_m']) if best else None,
+            ))
+
+    comp_df = pd.DataFrame(rows)
+
+    out_dir = Path.cwd() / "outputs"
+    ensure_dir(out_dir)
+    ts = ts_stamp()
+    out_csv = out_dir / f"compare_circles_altitude_{ts}.csv"
+    comp_df.to_csv(out_csv, index=False)
+
+    print(f"[compare] Circles: {len(circ_df)} | Circle clusters: {len(circ_clusters_df)} | Altitude clusters: {len(alt_clusters_df)}")
+    print(f"[compare] Wrote: {out_csv.resolve()}")
+    # Show a compact table
+    with pd.option_context("display.max_rows", 50, "display.width", 160):
+        print(comp_df.fillna("").head(30))
+
+if __name__ == "__main__":
+    main()

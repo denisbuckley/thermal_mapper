@@ -10,7 +10,7 @@ import re
 import warnings
 
 # Base directory for your outputs
-BASE_DIR = Path("/Users/denisbuckley/PycharmProjects/chatgpt_igc/outputs/batch_csv")
+BASE_DIR = Path("/Users/denisbuckley/PycharmProjects/thermal_mapper/outputs/batch_csv")
 
 # Optional default stem you can change if you want
 DEFAULT_STEM = "123310"

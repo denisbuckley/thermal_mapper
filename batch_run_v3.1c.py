@@ -371,9 +371,6 @@ def detect_circles(df: pd.DataFrame,
 
             circle_id += 1
             start_idx = i
-            circle_id += 1
-
-            start_idx = i
         i += 1
 
     return pd.DataFrame(circles)
@@ -637,7 +634,7 @@ def main() -> int:
         print(f"[ERROR] folder not found: {igc_dir}")
         return 1
 
-    igc_files = sorted(igc_dir.glob("*.igc"))
+    igc_files = sorted(list(igc_dir.glob("*.igc")) + list(igc_dir.glob("*.IGC")))
     if not igc_files:
         print(f"[WARN] no .igc files in {igc_dir}")
         return 0

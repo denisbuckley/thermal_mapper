@@ -1,0 +1,11 @@
+[alt v3g] Parsing IGC: 2020-11-08 Lumpy Paterson 108645.igc
+Traceback (most recent call last):
+  File "/Users/denisbuckley/PycharmProjects/chatgpt_igc/archive/altitude_gain_v3g.py", line 437, in <module>
+    main()
+  File "/Users/denisbuckley/PycharmProjects/chatgpt_igc/archive/altitude_gain_v3g.py", line 375, in main
+    df = parse_igc(path)
+         ^^^^^^^^^^^^^^^
+  File "/Users/denisbuckley/PycharmProjects/chatgpt_igc/drafts/circle_detector_full_360.py", line 70, in parse_igc
+    with open(filepath, 'r', encoding='utf-8', errors='replace') as f:
+         ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+FileNotFoundError: [Errno 2] No such file or directory: '2020-11-08 Lumpy Paterson 108645.igc'

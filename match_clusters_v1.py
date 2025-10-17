@@ -148,7 +148,7 @@ def main():
         return 2
 
     # ---- Match ----
-    # ---- Match ----
+
     matched, stats = match_clusters(
         circles[["cluster_id","lat","lon","t_start","t_end"]],
         alts[["cluster_id","t_start","t_end","lat","lon","alt_gain_m","duration_s","climb_rate_ms"]],

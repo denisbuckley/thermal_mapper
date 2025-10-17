@@ -1,0 +1,82 @@
+#!/usr/bin/env bash
+set -euo pipefail
+
+# --------- CONFIG YOU CAN EDIT ----------
+# Your filtered search (from DevTools), REMOVE skip=... (script sets it):
+BASE_QS="scoring_date_start=2000-01-01&scoring_date_end=2025-09-30&region_id_in=AU-WA&limit=100&include_story=false&include_stats=false"
+OUTDIR="./weglide_igc"
+SLEEP_SECS="0.25"
+# ---------------------------------------
+
+API_BASE="https://api.weglide.org/v1/flight"
+SITE_BASE="https://weglide.org/flight"
+TMP_JSON=".wg_list.json"
+TMP_HTML=".wg_page.html"
+
+mkdir -p "$OUTDIR"
+
+need_jq() { command -v jq >/dev/null || { echo "Please install jq (e.g. brew install jq)"; exit 1; }; }
+need_jq
+
+echo "== Collecting flight IDs =="
+: > .ids.tmp
+skip=0
+while : ; do
+  URL="${API_BASE}?${BASE_QS}&skip=${skip}"
+  echo "GET $URL"
+  curl -fsSL -H "Accept: application/json" "$URL" -o "$TMP_JSON" || { echo "Failed $URL"; break; }
+
+  # API returns an array of flights
+  count=$(jq 'if type=="array" then length else 0 end' "$TMP_JSON")
+  [[ "$count" -eq 0 ]] && break
+
+  jq -r '.[].id' "$TMP_JSON" >> .ids.tmp
+  skip=$((skip + 100))
+  sleep "$SLEEP_SECS"
+done
+
+sort -u .ids.tmp -o .ids.tmp
+TOTAL=$(wc -l < .ids.tmp | tr -d '[:space:]')
+echo "Collected $TOTAL unique IDs"
+[[ "$TOTAL" -gt 0 ]] || { echo "No IDs found. Check BASE_QS."; exit 0; }
+
+echo
+echo "== Downloading IGCs =="
+: > failed_weglide_ids.log
+
+while read -r id; do
+  [[ -z "$id" ]] && continue
+  out="${OUTDIR}/${id}.igc"
+  [[ -f "$out" ]] && { echo "✓ ${id} (already exists)"; continue; }
+
+  # 1) Fetch the public flight page HTML
+  curl -fsSL -L "${SITE_BASE}/${id}" -o "$TMP_HTML" || { echo "✗ ${id} (flight page fetch failed)" | tee -a failed_weglide_ids.log; continue; }
+
+  # 2) Extract a direct CDN .igc URL (handles SkySight wrapper by just finding the .igc itself)
+  igc_url=$(grep -oE 'https://weglidefiles\.b-cdn\.net[^"]+\.igc' "$TMP_HTML" | head -n1 || true)
+
+  if [[ -z "${igc_url:-}" ]]; then
+    echo "✗ ${id} (no .igc link found in page)" | tee -a failed_weglide_ids.log
+    continue
+  fi
+
+  # 3) Download the .igc
+  if curl -fsSL -L "$igc_url" -o "$out"; then
+    # Basic sanity check (IGC normally starts with A or H lines)
+    if head -n1 "$out" | grep -qE '^(A|HFDTE)'; then
+      echo "✓ ${id}  →  $(basename "$out")"
+    else
+      echo "✗ ${id} (downloaded non-IGC content)" | tee -a failed_weglide_ids.log
+      rm -f "$out"
+    fi
+  else
+    echo "✗ ${id} (download failed)" | tee -a failed_weglide_ids.log
+  fi
+
+  sleep "$SLEEP_SECS"
+done < .ids.tmp
+
+rm -f "$TMP_JSON" "$TMP_HTML" .ids.tmp
+
+echo
+echo "Done. IGCs saved in: $OUTDIR"

@@ -127,7 +127,7 @@ def keep_point_diamond(lat, lon, s_lat, s_lon, e_lat, e_lon, cone_half_deg):
 
 # ------------------------- writers -------------------------
 
-OUT_DIR = Path("outputs/waypoints")
+OUT_DIR = Path("../outputs/waypoints")
 OUT_DIR.mkdir(parents=True, exist_ok=True)
 
 def write_csv(rows, path: Path):
@@ -188,8 +188,8 @@ def get_float_input(prompt: str, default: float):
 # ------------------------- main -------------------------
 
 def main():
-    WAYPOINT_FILE = Path("gcwa extended.cup")
-    THERMALS_FILE = Path("outputs/waypoints/thermal_waypoints_v1.csv")
+    WAYPOINT_FILE = Path("../gcwa extended.cup")
+    THERMALS_FILE = Path("../outputs/waypoints/thermal_waypoints_v1.csv")
 
     print(f"Reading waypoints from '{WAYPOINT_FILE}'...")
     wps = read_waypoints_from_cup(WAYPOINT_FILE)

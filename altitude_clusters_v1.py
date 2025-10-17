@@ -4,6 +4,20 @@ import numpy as np
 from pathlib import Path
 import argparse, os
 
+LAST_IGC_FILE = Path(".last_igc")
+
+def _read_last_igc() -> Path | None:
+    try:
+        p = Path(LAST_IGC_FILE.read_text(encoding="utf-8").strip())
+        return p if p.exists() else None
+    except Exception:
+        return None
+
+def _write_last_igc(p: Path) -> None:
+    try:
+        LAST_IGC_FILE.write_text(str(p.resolve()), encoding="utf-8")
+    except Exception:
+        pass
 def parse_igc_brecords(igc_path: Path) -> pd.DataFrame:
     """
     Parse IGC B-records into a DataFrame with time, lat, lon, alt.
@@ -70,19 +84,48 @@ def outdir_for(igc_path: Path) -> Path:
 def main():
     import argparse
     from pathlib import Path
+    import glob
 
     ap = argparse.ArgumentParser()
     ap.add_argument("igc", nargs="?", help="Path to IGC file")
     ap.add_argument("--out", help="Override output CSV path")
     args = ap.parse_args()
 
-    # Resolve IGC path (arg or prompt with sensible default)
-    default_igc = Path("igc/2020-11-08 Lumpy Paterson 108645.igc")
-    igc_path = Path(args.igc) if args.igc else Path(
-        input(f"Enter IGC file path [default: {default_igc}]: ").strip() or default_igc
-    )
-    if not igc_path.exists():
-        raise FileNotFoundError(igc_path)
+    # Resolve IGC path: prefer arg, else valid .last_igc, else first file in ./igc
+    last_igc = _read_last_igc()
+    hint = None
+
+    # Build a fallback list from ./igc
+    try:
+        from glob import glob
+        candidates = (
+            sorted(glob("igc/*.igc")) +
+            sorted(glob("igc/*.IGC")) +
+            []  # add "igc/*.igc.gz" if you later support gunzip here
+        )
+        fallback = Path(candidates[0]) if candidates else None
+    except Exception:
+        fallback = None
+
+    # Prefer last_igc if it still exists; else fallback
+    if last_igc and last_igc.exists():
+        hint = last_igc
+    elif fallback and fallback.exists():
+        hint = fallback
+
+    if args.igc:
+        igc_path = Path(args.igc).expanduser()
+    else:
+        prompt = f"Enter IGC file path [{'default: ' + str(hint) if hint else 'no default'}]: "
+        user_in = input(prompt).strip()
+        igc_path = Path(user_in).expanduser() if user_in else hint
+
+    if igc_path is None or not igc_path.exists():
+        raise FileNotFoundError(igc_path or "<none>")
+
+    # Remember the chosen file for next run
+    _write_last_igc(igc_path)
+    print(f"[INFO] using IGC: {igc_path}")
 
     # Per-flight run directory: outputs/batch_csv/<flight>
     flight = igc_path.stem.rstrip(')').strip()
@@ -106,6 +149,5 @@ def main():
     clusters.to_csv(out_path, index=False)
     print(f"[OK] wrote {len(clusters)} altitude clusters → {out_path}")
     return 0
-
 if __name__ == "__main__":
     main()

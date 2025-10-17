@@ -383,32 +383,56 @@ def main() -> int:
     args = ap.parse_args()
 
     out_root = Path("outputs/batch_csv")
-    last_file = Path(".last_igc.txt")
+    from glob import glob  # add near the top of the file if not present
 
-    # --- Load last used path if available; else hardcoded default ---
-    if last_file.exists():
-        try:
-            default_igc = Path(last_file.read_text().strip())
-        except Exception:
-            default_igc = Path("igc/2020-11-08 Lumpy Paterson 108645.igc")
-    else:
-        default_igc = Path("igc/2020-11-08 Lumpy Paterson 108645.igc")
+    # ... inside main(), replace everything from:
+    #   last_file = Path(".last_igc.txt")
+    #   # --- Load last used path if available; else hardcoded default ---
+    #   ...
+    #   # --- Resolve IGC path (arg or prompt) ---
+    #   ...
+    #   # --- Save as new default for next run ---
+    #   ...
+    # with the following:
 
-    # --- Resolve IGC path (arg or prompt) ---
-    if args.igc:
-        igc_path = Path(args.igc)
-    else:
-        inp = input(f"Enter IGC file path [default: {default_igc}]: ").strip()
-        igc_path = Path(inp) if inp else default_igc
+    LAST_IGC_FILE = Path(".last_igc")  # keep this name consistent across tools
 
-    if not igc_path.exists():
-        raise FileNotFoundError(igc_path)
-
-    # --- Save as new default for next run ---
+    # --- Build a sensible default hint: prefer valid .last_igc, else first file in ./igc ---
     try:
-        last_file.write_text(str(igc_path))
+        candidates = sorted(glob("igc/*.igc")) + sorted(glob("igc/*.IGC"))
+        fallback = Path(candidates[0]).resolve() if candidates else None
+    except Exception:
+        fallback = None
+
+    default_hint = None
+    if LAST_IGC_FILE.exists():
+        try:
+            prev = Path(LAST_IGC_FILE.read_text().strip())
+            if prev.exists():
+                default_hint = prev
+        except Exception:
+            pass
+    if default_hint is None:
+        default_hint = fallback
+
+    # --- Resolve IGC path (arg wins; else prompt with hint if any) ---
+    if args.igc:
+        igc_path = Path(args.igc).expanduser().resolve()
+    else:
+        prompt = f"Enter IGC file path [{'default: ' + str(default_hint) if default_hint else 'no default'}]: "
+        inp = input(prompt).strip()
+        igc_path = Path(inp).expanduser().resolve() if inp else default_hint
+
+    if igc_path is None or not igc_path.exists():
+        raise FileNotFoundError(igc_path or "<none>")
+
+    # --- Save absolute path for next run ---
+    try:
+        LAST_IGC_FILE.write_text(str(igc_path), encoding="utf-8")
     except Exception as e:
         print(f"[WARN] Could not save last IGC path: {e}")
+
+    print(f"[INFO] using IGC: {igc_path}")
 
     # Per-flight run directory under outputs/batch_csv/<flight_basename>
     flight = igc_path.stem.rstrip(')').strip()

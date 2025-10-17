@@ -115,7 +115,6 @@ def compute_derived(df: pd.DataFrame) -> pd.DataFrame:
         if np.isnan(heads[0]):
             heads[0] = heads[1] if len(heads) > 1 else 0.0
         out["heading"] = pd.Series(heads, index=out.index).bfill().fillna(0.0)
-        out["heading"] = 0.0
 
     return out
 

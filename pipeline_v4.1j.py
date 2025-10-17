@@ -16,7 +16,6 @@ from matplotlib.patches import Ellipse
 import numpy as np
 import pandas as pd
 
-import re
 
 
 def igc_pilot_name(igc_path: Path) -> str:
@@ -919,19 +918,6 @@ def read_clusters_xy(dir_path: Path, fname: str):
         out["cluster_id"] = df[cols["cluster_id"]]
     return out.dropna(subset=["lat", "lon"])
 
-
-def matched_summary_text(run_dir: Path) -> str:
-    p = run_dir / "matched_clusters.csv"
-    if not p.exists():
-        return "matches: 0"
-    try:
-        m = pd.read_csv(p)
-    except Exception:
-        return "matches: 0"
-    if m.empty:
-        return "matches: 0"
-    cols = {c.lower(): c for c in m.columns}
-
     def col(name):
         return cols.get(name)
 
@@ -954,20 +940,6 @@ def matched_summary_text(run_dir: Path) -> str:
 
     )
 
-
-def read_grouped_matches(run_dir: Path) -> Optional[pd.DataFrame]:
-    """Load thermals produced by the thermal builder (grouped_matches.csv)."""
-    p = run_dir / "grouped_matches.csv"
-    if not p.exists():
-        return None
-    try:
-        df = pd.read_csv(p)
-        # must have lat/lon
-        if not {"lat", "lon"}.issubset({c.lower() for c in df.columns}):
-            return None
-        return df
-    except Exception:
-        return None
 
 
 def _meters_to_degs(lat_deg: float, meters: float) -> tuple[float, float]:
@@ -1031,20 +1003,6 @@ def read_grouped_matches(run_dir: Path) -> Optional[pd.DataFrame]:
         return df
     except Exception:
         return None
-
-def _meters_to_degs(lat_deg: float, meters: float) -> tuple[float, float]:
-    """
-    Convert a metric radius to ~degrees of lat/long for plotting an ellipse:
-    - height (lat) in deg ≈ meters / 111,000
-    - width  (lon) in deg ≈ meters / (111,000 * cos(lat))
-    """
-    if not np.isfinite(lat_deg):
-        lat_deg = 0.0
-    km_per_deg_lat = 111.0
-    km_per_deg_lon = km_per_deg_lat * max(0.1, math.cos(math.radians(lat_deg)))  # avoid div by ~0 near poles
-    h_deg = meters / (km_per_deg_lat * 1000.0)
-    w_deg = meters / (km_per_deg_lon * 1000.0)
-    return w_deg, h_deg
 
 def to_local_xy(lat, lon, lat0, lon0):
     """Approx local ENU meters around (lat0, lon0)."""

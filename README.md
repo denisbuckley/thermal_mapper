@@ -46,7 +46,8 @@ python batch_run_v3.1.py
 python build_thermals_v1a.py
 python sweep_eps_for_thermals.py
 python track_plotter_batch_v1b.py
-```match_clusters_v1.py
+python match_clusters_v1.py
+```
 ___
 
 ### Single *.igc file
@@ -55,13 +56,14 @@ Run a single *.igc file and return a plot showing track, circle/altitude and mat
 
 ``` bash
 python pipeline_v4.1j.py
-python plot_flight_clusters_v1a.py
+
 ```
 ___
 
 ### Tuning
 
-Standalone scripts to find optimal tuning 
+Standalone scripts to find optimal tuning.
+
 Run scripts in the following order:
 
 ```

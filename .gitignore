@@ -28,3 +28,9 @@ __pycache__/
 .vscode/
 .DS_Store
 .last_igc*
+.last_igc
+.last_igc.txt
+outputs/
+*.csv
+*.png
+*.svg
